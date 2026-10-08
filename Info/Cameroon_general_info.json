@@ -1,0 +1,24 @@
+{
+  "country": "Cameroon",
+  "iso0": "CMR",
+  "doHIVAdj": true,
+  "poly.path": "../shapeFiles/georepo_CMR_shp",
+  "poly.layer.adm0": "georepo_CMR_0",
+  "poly.layer.adm1": "georepo_CMR_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "cmr",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2005,
+  "surveys_1frame": [2011, 2018],
+  "strata_weight_source": "survey",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Cameroon_general_info.json",
+  "poly.layer.adm2": "georepo_CMR_2",
+  "poly.label.adm2": "NAME_2"
+}

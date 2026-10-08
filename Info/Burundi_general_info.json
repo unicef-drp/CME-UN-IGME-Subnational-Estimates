@@ -1,0 +1,23 @@
+{
+  "country": "Burundi",
+  "iso0": "BDI",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_BDI_shp",
+  "poly.layer.adm0": "georepo_BDI_0",
+  "poly.layer.adm1": "georepo_BDI_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "bdi",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2008,
+  "surveys_1frame": [2010, 2016],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "strat",
+    "bench.model": "bench"
+  },
+  "info.name": "Burundi_general_info.json",
+  "poly.layer.adm2": "georepo_BDI_2",
+  "poly.label.adm2": "NAME_2"
+}

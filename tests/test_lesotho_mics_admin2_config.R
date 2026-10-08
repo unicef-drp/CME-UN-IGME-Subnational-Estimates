@@ -1,0 +1,11 @@
+source('Rcode/_script_for_specific_tasks/MICS_Geospatial_DataProcessing.R')
+out <- tempfile(fileext='.rda')
+result <- process_lesotho_mics_2018_geospatial(output_file=out)
+stopifnot(all(c('admin2','admin2.char','admin2.name') %in% names(result)),
+          !anyNA(result$admin2.char), length(unique(result$cluster))==400L)
+old <- new.env(parent=emptyenv())
+load('Data/MICS/Lesotho/2018/lso.2018.geo.tmp.rda',envir=old)
+keep <- setdiff(names(old$dat.tmp), c('admin2','admin2.char','admin2.name'))
+stopifnot(isTRUE(all.equal(as.data.frame(result[keep]),as.data.frame(old$dat.tmp[keep]),check.attributes=FALSE)))
+unlink(out)
+cat('PASS: Lesotho MICS retains configured Admin-2 and original survey/Admin-1 values.\n')

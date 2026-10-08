@@ -1,0 +1,1046 @@
+---
+title: "BB8 Model Comparison Dashboard"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-fold: true
+    theme: cosmo
+page-layout: full
+params:
+  comparison_rds: ""
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+<style>
+.page-columns .content {
+  max-width: 1480px;
+}
+
+.cell-output-display,
+.html-widget,
+.plotly {
+  width: 100% !important;
+}
+
+.plotly.html-widget,
+.html-widget.plotly {
+  min-height: 780px !important;
+  height: 780px !important;
+}
+
+.admin1-region-tabs .nav-tabs {
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.admin1-region-tabs .nav-link {
+  padding: 0.45rem 0.7rem;
+}
+
+.admin1-region-tab-content {
+  padding-top: 1rem;
+}
+</style>
+
+```{r setup, results='asis'}
+required_packages <- c(
+  "dplyr", "tidyr", "ggplot2", "plotly", "DT", "scales",
+  "htmltools", "knitr"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0) {
+  stop(
+    "Install these R packages before rendering the dashboard: ",
+    paste(missing_packages, collapse = ", ")
+  )
+}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(scales)
+
+comparison_rds <- params$comparison_rds
+if (!nzchar(comparison_rds)) {
+  comparison_rds <- Sys.getenv("BB8_COMPARISON_RDS")
+}
+if (!nzchar(comparison_rds) || !file.exists(comparison_rds)) {
+  stop("Could not find comparison data. Run Rcode/9_Comparison_Plot.R first.")
+}
+
+bundle <- readRDS(comparison_rds)
+country <- bundle$country
+source(file.path(bundle$home_dir, 'Rcode', '_supporting_scripts',
+                 'report_output_config.R'))
+report_excluded_ids <- report_excluded_admin_ids(bundle$home_dir, country, 1L)
+if (!isTRUE(bundle$has_admin2)) {
+  cat(
+    '<style>',
+    '#admin-2-all-available-methods,',
+    '#toc-admin-2-all-available-methods { display: none !important; }',
+    '</style>\n'
+  )
+}
+dashboard_title <- if (!is.null(bundle$dashboard_title)) {
+  bundle$dashboard_title
+} else {
+  paste("BB8 Model Comparison for", country)
+}
+natl_all <- bundle$natl_all
+plot_excluded_methods <- c("natl.sd.yearly")
+
+classify_method <- function(method) {
+  dplyr::case_when(
+    method == "igme" ~ "IGME target",
+    method == "natl.sd.yearly" ~ "National smoothed direct",
+    grepl("^natl\\.bb", method) ~ "National BB8",
+    grepl("\\.bench$", method) ~ "Benchmarked subnational aggregate",
+    grepl("BB8", method) ~ "Unbenchmarked subnational aggregate",
+    grepl("^aggre\\.sd", method) ~ "Smoothed direct aggregate",
+    TRUE ~ "Other"
+  )
+}
+
+comparison_family <- function(method) {
+  dplyr::case_when(
+    method == "igme" ~ "IGME national series",
+    method == "natl.sd.yearly" ~ "National smoothed direct",
+    method == "aggre.sd.adm1" ~ "Admin 1 period smoothed direct aggregate",
+    method == "aggre.sd.yearly.adm1" ~ "Admin 1 yearly smoothed direct aggregate",
+    method == "aggre.sd.adm2" ~ "Admin 2 period smoothed direct aggregate",
+    method == "aggre.sd.yearly.adm2" ~ "Admin 2 yearly smoothed direct aggregate",
+    grepl("strat\\.BB8\\.bench$", method) ~ "Same-frame stratified benchmarked",
+    grepl("unstrat\\.allsurveys\\.BB8\\.bench$", method) ~ "All-survey unstratified benchmarked",
+    grepl("strat\\.BB8$", method) ~ "Same-frame stratified unbenchmarked",
+    grepl("unstrat\\.allsurveys\\.BB8$", method) ~ "All-survey unstratified unbenchmarked",
+    grepl("^natl\\.bb\\.strat$", method) ~ "National same-frame stratified BB8",
+    grepl("^natl\\.bb\\.unstrat\\.allsurveys$", method) ~ "National all-survey unstratified BB8",
+    TRUE ~ "Other"
+  )
+}
+
+classify_method_admin_level <- function(method) {
+  dplyr::case_when(
+    grepl("adm1", method) ~ "Admin1",
+    grepl("adm2", method) ~ "Admin2",
+    TRUE ~ "National"
+  )
+}
+
+is_final_candidate <- function(method) {
+  grepl("strat\\.BB8\\.bench$", method) |
+    grepl("unstrat\\.allsurveys\\.BB8\\.bench$", method)
+}
+
+dashboard_plot_height <- 780L
+dashboard_line_width <- 3
+dashboard_igme_line_width <- 5
+
+chart_layout <- function(x_title, y_title) {
+  list(
+    xaxis = list(title = list(text = x_title, standoff = 20), automargin = TRUE),
+    yaxis = list(title = list(text = y_title, standoff = 20), automargin = TRUE),
+    legend = list(
+      orientation = "h",
+      groupclick = "togglegroup",
+      x = 0,
+      xanchor = "left",
+      y = 1.08,
+      yanchor = "bottom",
+      font = list(size = 12)
+    ),
+    margin = list(l = 100, r = 40, t = 135, b = 90),
+    height = dashboard_plot_height,
+    autosize = TRUE,
+    hovermode = "closest",
+    hoverlabel = list(
+      bgcolor = "rgba(255, 255, 255, 0.97)",
+      bordercolor = "#4D4D4D",
+      font = list(color = "#222222", size = 13, family = "Arial, sans-serif"),
+      align = "left"
+    )
+  )
+}
+
+plot_df <- bind_rows(
+  natl_all %>%
+    transmute(
+      method,
+      years = as.numeric(years),
+      outcome = "NMR",
+      lower = lower_nmr * 1000,
+      median = median_nmr * 1000,
+      upper = upper_nmr * 1000
+    ),
+  natl_all %>%
+    transmute(
+      method,
+      years = as.numeric(years),
+      outcome = "U5MR",
+      lower = lower_u5 * 1000,
+      median = median_u5 * 1000,
+      upper = upper_u5 * 1000
+    )
+) %>%
+  filter(!is.na(years), !is.na(median)) %>%
+  mutate(
+    method_group = classify_method(method),
+    family = comparison_family(method),
+    method_admin_level = classify_method_admin_level(method),
+    final_candidate = is_final_candidate(method)
+  )
+
+load_first_rda_object <- function(path) {
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+  env <- new.env(parent = emptyenv())
+  object_names <- load(path, envir = env)
+  if (length(object_names) == 0) {
+    return(NULL)
+  }
+  get(object_names[[1]], envir = env)
+}
+
+build_direct_estimates <- function(country, res_dir) {
+  specs <- data.frame(
+    outcome = c("U5MR", "NMR"),
+    metric_dir = c("U5MR", "NMR"),
+    suffix = c("u5", "nmr"),
+    stringsAsFactors = FALSE
+  )
+
+  direct_rows <- lapply(seq_len(nrow(specs)), function(i) {
+    path <- file.path(
+      res_dir,
+      "Direct",
+      specs$metric_dir[[i]],
+      paste0(country, "_direct_admin1_yearly_", specs$suffix[[i]], ".rda")
+    )
+    direct_data <- load_first_rda_object(path)
+    if (is.null(direct_data)) {
+      return(NULL)
+    }
+    if (!"surveyYears" %in% names(direct_data)) {
+      direct_data$surveyYears <- direct_data$survey
+    }
+
+    direct_data %>%
+      transmute(
+        outcome = specs$outcome[[i]],
+        direct_level = if_else(region == "All", "National direct yearly", "Admin 1 direct yearly"),
+        region = as.character(region),
+        years = as.numeric(as.character(years)),
+        lower = lower * 1000,
+        median = mean * 1000,
+        upper = upper * 1000,
+        survey = as.character(survey),
+        survey_year = as.character(surveyYears),
+        source_file = basename(path)
+      )
+  })
+
+  direct_rows <- direct_rows[!vapply(direct_rows, is.null, logical(1))]
+  if (length(direct_rows) == 0) {
+    return(data.frame())
+  }
+
+  bind_rows(direct_rows) %>%
+    filter(!is.na(years), !is.na(median))
+}
+
+make_timeseries <- function(data, outcome_name, ribbon_methods = "igme") {
+  data <- data %>%
+    filter(outcome == outcome_name, !method %in% plot_excluded_methods)
+  if (nrow(data) == 0) {
+    return(htmltools::div("No data available."))
+  }
+  data <- data %>%
+    arrange(method, years) %>%
+    mutate(
+      hover_text = paste0(
+        "Method: ", method,
+        "<br>Family: ", family,
+        "<br>Year: ", years,
+        "<br>Median: ", round(median, 2),
+        "<br>Lower: ", round(lower, 2),
+        "<br>Upper: ", round(upper, 2)
+      )
+    )
+  methods <- unique(data$method)
+  palette <- setNames(scales::hue_pal()(length(methods)), methods)
+  if ("igme" %in% names(palette)) {
+    palette["igme"] <- "#D62728"
+  }
+  ribbon_data <- data %>%
+    filter(
+      method %in% intersect(ribbon_methods, methods),
+      !is.na(lower),
+      !is.na(upper)
+    )
+
+  p <- plot_ly()
+  for (method_name in unique(ribbon_data$method)) {
+    tmp <- ribbon_data %>% filter(method == method_name)
+    p <- p %>%
+      add_ribbons(
+        data = tmp,
+        x = ~years,
+        ymin = ~lower,
+        ymax = ~upper,
+        fillcolor = scales::alpha(palette[[method_name]], 0.16),
+        line = list(color = "rgba(0,0,0,0)"),
+        legendgroup = method_name,
+        hoverinfo = "skip",
+        showlegend = FALSE
+      )
+  }
+
+  for (method_name in methods) {
+    tmp <- data %>% filter(method == method_name)
+    line_width <- if (identical(method_name, "igme")) dashboard_igme_line_width else dashboard_line_width
+    p <- p %>%
+      add_trace(
+        data = tmp,
+        x = ~years,
+        y = ~median,
+        type = "scatter",
+        mode = "lines",
+        name = method_name,
+        legendgroup = method_name,
+        line = list(
+          color = unname(palette[[method_name]]),
+          width = line_width
+        ),
+        text = ~hover_text,
+        hoverinfo = "text"
+      )
+  }
+  p <- do.call(
+    plotly::layout,
+    c(
+      list(p = p),
+      chart_layout(
+        "Year",
+        paste0(outcome_name, " deaths per 1,000 live births")
+      )
+    )
+  )
+  p %>% config(responsive = TRUE, displaylogo = FALSE)
+}
+
+make_direct_plot <- function(data, outcome_name) {
+  data <- data %>%
+    filter(outcome == outcome_name)
+  if (nrow(data) == 0) {
+    return(htmltools::div("No direct estimate data available."))
+  }
+
+  data <- data %>%
+    arrange(survey_year, region, years) %>%
+    mutate(
+      survey_label = paste0("Survey ", survey_year),
+      hover_text = paste0(
+        "Level: ", direct_level,
+        "<br>Region: ", region,
+        "<br>Survey year: ", survey_year,
+        "<br>Year: ", years,
+        "<br>Mean: ", round(median, 2),
+        "<br>Lower: ", round(lower, 2),
+        "<br>Upper: ", round(upper, 2)
+      )
+    )
+
+  line_data <- data %>% filter(region == "All")
+  if (nrow(line_data) == 0) {
+    return(htmltools::div("No national direct estimate data available."))
+  }
+  survey_levels <- unique(line_data$survey_label)
+  palette <- setNames(scales::hue_pal()(length(survey_levels)), survey_levels)
+
+  p <- plot_ly()
+  p <- p %>%
+    add_trace(
+      data = line_data,
+      x = ~years,
+      y = ~median,
+      color = ~survey_label,
+      colors = palette,
+      type = "scatter",
+      mode = "lines",
+      line = list(width = dashboard_line_width),
+      text = ~hover_text,
+      hoverinfo = "text"
+    )
+
+  p <- do.call(
+    plotly::layout,
+    c(
+      list(p = p),
+      chart_layout(
+        "Year",
+        paste0("Direct ", outcome_name, " deaths per 1,000 live births")
+      )
+    )
+  )
+  p %>% config(responsive = TRUE, displaylogo = FALSE)
+}
+
+direct_estimates_df <- build_direct_estimates(country, bundle$res_dir)
+
+normalize_utf8_text <- function(labels) {
+  labels <- as.character(labels)
+  invalid_utf8 <- !is.na(labels) & !validUTF8(labels)
+  labels[invalid_utf8] <- iconv(labels[invalid_utf8], from = "latin1",
+                                to = "UTF-8", sub = "byte")
+  enc2utf8(labels)
+}
+
+admin_display_names <- function(names_df) {
+  label_candidates <- c("GeoRepo", "GADM")
+  label_col <- label_candidates[label_candidates %in% names(names_df)][1]
+  if (is.na(label_col)) {
+    label_col <- setdiff(names(names_df), "Internal")[1]
+  }
+  if (is.na(label_col)) {
+    stop("Admin name table needs a display-name column.", call. = FALSE)
+  }
+  normalize_utf8_text(names_df[[label_col]])
+}
+
+load_admin1_lookup <- function(bundle) {
+  shape_root <- file.path(bundle$home_dir, "Data", "shapeFiles")
+  name_files <- list.files(
+    shape_root,
+    pattern = paste0("^", bundle$country, "_Amat_Names[.]rda$"),
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  if (length(name_files) == 0) {
+    return(data.frame(region = character(), region_display = character()))
+  }
+
+  env <- new.env(parent = emptyenv())
+  load(name_files[[1]], envir = env)
+  if (!exists("admin1.names", envir = env, inherits = FALSE)) {
+    return(data.frame(region = character(), region_display = character()))
+  }
+
+  admin1_names <- get("admin1.names", envir = env, inherits = FALSE)
+  data.frame(
+    region = as.character(admin1_names$Internal),
+    region_display = admin_display_names(admin1_names),
+    stringsAsFactors = FALSE
+  )
+}
+
+model_method_label <- function(spec) {
+  stratification <- as.character(spec$stratification)
+  survey_frame <- as.character(spec$survey_frame)
+  benchmarked <- isTRUE(spec$benchmarked)
+
+  if (identical(stratification, "Unstratified") &&
+      identical(survey_frame, "All surveys") &&
+      !benchmarked) {
+    return("All-survey unstratified BB8")
+  }
+  if (identical(stratification, "Stratified") &&
+      identical(survey_frame, "Same frame") &&
+      !benchmarked) {
+    return("Same-frame stratified BB8")
+  }
+  if (identical(stratification, "Unstratified") &&
+      identical(survey_frame, "All surveys") &&
+      benchmarked) {
+    return("All-survey unstratified BB8 benchmarked")
+  }
+  if (identical(stratification, "Stratified") &&
+      identical(survey_frame, "Same frame") &&
+      benchmarked) {
+    return("Same-frame stratified BB8 benchmarked")
+  }
+
+  paste(
+    stratification,
+    survey_frame,
+    ifelse(benchmarked, "benchmarked", "unbenchmarked")
+  )
+}
+
+model_family_label <- function(spec) {
+  stratification <- tolower(as.character(spec$stratification))
+  survey_frame <- as.character(spec$survey_frame)
+  benchmarked <- ifelse(isTRUE(spec$benchmarked), "benchmarked", "unbenchmarked")
+
+  frame_label <- dplyr::case_when(
+    identical(survey_frame, "All surveys") ~ "all-survey",
+    identical(survey_frame, "Same frame") ~ "same-frame",
+    TRUE ~ tolower(survey_frame)
+  )
+
+  paste("Admin 1", frame_label, stratification, benchmarked)
+}
+
+build_admin1_model_estimates <- function(bundle) {
+  inventory <- bundle$model_inventory
+  if (is.null(inventory) || nrow(inventory) == 0) {
+    return(data.frame())
+  }
+
+  inventory <- inventory %>%
+    filter(admin_level == "Admin1", exists, outcome %in% c("NMR", "U5MR"))
+  if (nrow(inventory) == 0) {
+    return(data.frame())
+  }
+
+  admin1_lookup <- load_admin1_lookup(bundle)
+
+  rows <- lapply(seq_len(nrow(inventory)), function(i) {
+    spec <- inventory[i, ]
+    path <- file.path(bundle$res_dir, spec$file_path)
+    result <- load_first_rda_object(path)
+    if (is.null(result) || is.null(result$overall)) {
+      return(NULL)
+    }
+
+    overall <- result$overall
+    overall <- filter_report_admin_rows(overall, report_excluded_ids)
+    required_cols <- c("region", "years", "lower", "median", "upper")
+    if (!all(required_cols %in% names(overall))) {
+      return(NULL)
+    }
+
+    overall %>%
+      transmute(
+        outcome = spec$outcome,
+        method = model_method_label(spec),
+        family = model_family_label(spec),
+        stratification = as.character(spec$stratification),
+        survey_frame = as.character(spec$survey_frame),
+        benchmarked = isTRUE(spec$benchmarked),
+        model_file = spec$file_name,
+        final_candidate = isTRUE(spec$final_candidate),
+        region = as.character(region),
+        years = as.numeric(as.character(years)),
+        lower = lower * 1000,
+        median = median * 1000,
+        upper = upper * 1000
+      )
+  })
+
+  rows <- rows[!vapply(rows, is.null, logical(1))]
+  if (length(rows) == 0) {
+    return(data.frame())
+  }
+
+  bind_rows(rows) %>%
+    left_join(admin1_lookup, by = "region") %>%
+    mutate(
+      region_display = if_else(
+        is.na(region_display) | region_display == "",
+        region,
+        region_display
+      )
+    ) %>%
+    filter(!is.na(years), !is.na(median))
+}
+
+slugify_id <- function(label) {
+  label <- normalize_utf8_text(label)
+  label <- iconv(label, from = "", to = "ASCII//TRANSLIT", sub = "")
+  label <- tolower(label)
+  label <- gsub("[^a-z0-9]+", "-", label)
+  label <- gsub("(^-+|-+$)", "", label)
+  ifelse(nzchar(label), label, "area")
+}
+
+make_admin1_region_timeseries <- function(data, outcome_name, region_name) {
+  data <- data %>%
+    filter(outcome == outcome_name, region_display == region_name) %>%
+    arrange(method, years)
+  if (nrow(data) == 0) {
+    return(htmltools::div("No Admin-1 model estimates available."))
+  }
+
+  data <- data %>%
+    mutate(
+      hover_text = paste0(
+        "Admin-1: ", region_display,
+        "<br>Method: ", method,
+        "<br>Family: ", family,
+        "<br>Year: ", years,
+        "<br>Median: ", round(median, 2),
+        "<br>Lower: ", round(lower, 2),
+        "<br>Upper: ", round(upper, 2),
+        "<br>File: ", model_file
+      )
+    )
+
+  methods <- unique(data$method)
+  palette <- setNames(scales::hue_pal()(length(methods)), methods)
+  fixed_palette <- c(
+    "All-survey unstratified BB8" = "#0072B2",
+    "Same-frame stratified BB8" = "#009E73"
+  )
+  palette[names(fixed_palette)[names(fixed_palette) %in% names(palette)]] <-
+    fixed_palette[names(fixed_palette) %in% names(palette)]
+
+  p <- plot_ly()
+  ribbon_data <- data %>%
+    filter(!is.na(lower), !is.na(upper))
+  for (method_name in unique(ribbon_data$method)) {
+    tmp <- ribbon_data %>% filter(method == method_name)
+    p <- p %>%
+      add_ribbons(
+        data = tmp,
+        x = ~years,
+        ymin = ~lower,
+        ymax = ~upper,
+        fillcolor = scales::alpha(palette[[method_name]], 0.15),
+        line = list(color = "rgba(0,0,0,0)"),
+        legendgroup = method_name,
+        hoverinfo = "skip",
+        showlegend = FALSE
+      )
+  }
+
+  for (method_name in methods) {
+    tmp <- data %>% filter(method == method_name)
+    p <- p %>%
+      add_trace(
+        data = tmp,
+        x = ~years,
+        y = ~median,
+        type = "scatter",
+        mode = "lines",
+        name = method_name,
+        legendgroup = method_name,
+        line = list(
+          color = unname(palette[[method_name]]),
+          width = dashboard_line_width
+        ),
+        text = ~hover_text,
+        hoverinfo = "text"
+      )
+  }
+
+  p <- do.call(
+    plotly::layout,
+    c(
+      list(p = p),
+      chart_layout(
+        "Year",
+        paste0(outcome_name, " deaths per 1,000 live births")
+      )
+    )
+  )
+  p %>% config(responsive = TRUE, displaylogo = FALSE)
+}
+
+make_admin1_region_tabs <- function(data, outcome_name = "U5MR") {
+  methods_to_plot <- c(
+    "All-survey unstratified BB8",
+    "Same-frame stratified BB8"
+  )
+  data <- data %>%
+    filter(
+      outcome == outcome_name,
+      !benchmarked,
+      method %in% methods_to_plot
+    )
+  if (nrow(data) == 0) {
+    return(htmltools::div("No Admin-1 unbenchmarked BB8 estimates available."))
+  }
+
+  regions <- data %>%
+    distinct(region, region_display) %>%
+    arrange(region_display)
+  tab_ids <- paste0(
+    "admin1-region-stratified-unbenchmarked-",
+    tolower(outcome_name),
+    "-",
+    make.unique(vapply(regions$region_display, slugify_id, character(1)), sep = "-")
+  )
+
+  nav_items <- lapply(seq_len(nrow(regions)), function(i) {
+    htmltools::tags$li(
+      class = "nav-item",
+      role = "presentation",
+      htmltools::tags$button(
+        class = paste("nav-link", if (i == 1) "active" else ""),
+        id = paste0(tab_ids[[i]], "-tab"),
+        `data-bs-toggle` = "tab",
+        `data-bs-target` = paste0("#", tab_ids[[i]]),
+        type = "button",
+        role = "tab",
+        `aria-controls` = tab_ids[[i]],
+        `aria-selected` = if (i == 1) "true" else "false",
+        regions$region_display[[i]]
+      )
+    )
+  })
+
+  tab_panes <- lapply(seq_len(nrow(regions)), function(i) {
+    htmltools::tags$div(
+      class = paste("tab-pane fade", if (i == 1) "show active" else ""),
+      id = tab_ids[[i]],
+      role = "tabpanel",
+      `aria-labelledby` = paste0(tab_ids[[i]], "-tab"),
+      make_admin1_region_timeseries(
+        data,
+        outcome_name,
+        regions$region_display[[i]]
+      )
+    )
+  })
+
+  htmltools::tags$div(
+    class = "admin1-region-tabs",
+    do.call(
+      htmltools::tags$ul,
+      c(list(class = "nav nav-tabs", role = "tablist"), nav_items)
+    ),
+    do.call(
+      htmltools::tags$div,
+      c(list(class = "tab-content admin1-region-tab-content"), tab_panes)
+    ),
+    htmltools::tags$script(htmltools::HTML(
+      "document.addEventListener('shown.bs.tab', function () {
+        if (!window.Plotly) return;
+        document.querySelectorAll('.tab-pane.active .plotly').forEach(function (el) {
+          Plotly.Plots.resize(el);
+        });
+      });"
+    ))
+  )
+}
+
+admin1_model_df <- build_admin1_model_estimates(bundle)
+
+datatable_options_for <- function(data, page_length = 12) {
+  options <- list(pageLength = page_length, scrollX = TRUE)
+  if ("outcome" %in% names(data)) {
+    options$searchCols <- lapply(
+      names(data),
+      function(column_name) {
+        if (column_name == "outcome") {
+          list(search = "U5MR")
+        } else {
+          NULL
+        }
+      }
+    )
+  }
+  options
+}
+```
+
+# Overview
+
+```{r overview, results='asis'}
+overview_items <- c(
+  "Country" = country,
+  "Generated at" = as.character(bundle$generated_at),
+  "Comparison data" = comparison_rds,
+  "Admin-2 available" = as.character(bundle$has_admin2),
+  "Crisis adjustment applied to selected U5MR" = as.character(
+    isTRUE(bundle$crisis_adjustment)
+  ),
+  "Available plotted methods" = paste(
+    setdiff(bundle$methods_available, plot_excluded_methods),
+    collapse = ", "
+  )
+)
+
+knitr::asis_output(
+  paste0("- **", names(overview_items), ":** ", overview_items, collapse = "\n")
+)
+```
+
+```{r cod_crisis_update_note, results='asis'}
+if (identical(country, "DR_Congo") && isTRUE(bundle$crisis_adjustment)) {
+  source(file.path(bundle$home_dir, "Rcode", "_supporting_scripts", "cod_crisis_report_notes.R"))
+  cat(paste(cod_crisis_report_notes(bundle$home_dir), collapse = "\n\n"), "\n\n")
+  cat(paste(
+    "For the stratified comparison branches, 'benchmarked' denotes a ratio-based",
+    "model refit, not exact national calibration. These branches are not the",
+    "selected final estimates and their residual national gaps require review.\n\n"
+  ))
+}
+```
+
+```{r eth_crisis_update_note, results='asis'}
+if (identical(country, "Ethiopia") && isTRUE(bundle$crisis_adjustment)) {
+  cat(paste0("Selected benchmarked U5MR includes the Tigray-only crisis allocation for 2021--2023. Infant deaths and deaths at ages 1--4 are distributed separately across the seven Tigray zones using their corresponding annual population shares. This assumes equal age-specific excess mortality risk within Tigray. NMR is unchanged.\n\n",
+    "The 2023 geographic attribution remains unverified in the primary mortality source. The intervals do not include additional uncertainty in crisis deaths or their allocation. National death totals are preserved, but the nonlinear conversion does not ensure exact national U5MR aggregation. The unbenchmarked comparison panels retain their unadjusted model estimates.\n\n"))
+}
+```
+
+```{r mwi_crisis_update_note, results='asis'}
+if (identical(country, "Malawi") && isTRUE(bundle$crisis_adjustment)) {
+  source(file.path(bundle$home_dir, "Rcode", "_supporting_scripts", "mwi_crisis_report_notes.R"))
+  cat(paste(mwi_crisis_report_notes(bundle$home_dir), collapse = "\n\n"), "\n\n")
+}
+```
+
+```{r sdn_crisis_update_note, results='asis'}
+if (identical(country, "Sudan") && isTRUE(bundle$crisis_adjustment)) {
+  cat(paste0("Selected benchmarked U5MR includes the approved Darfur-only scenario for 2004--2005. Infant and ages 1--4 deaths are allocated separately by annual age-specific population within the five current Darfur states. This assumes equal age-specific excess mortality risk within Darfur. NMR is unchanged.\n\n",
+    "The updated national workbook is authoritative: the recent-war adjustment is intentionally 2025 only, with no adjustment for 2023--2024. For 2025, the workbook totals of 6,257 infant deaths and 9,215 deaths at ages 1--4 are allocated across 18 states using their shares of recorded full-year conflict fatalities. Geographic weights come from the UK Home Office [July 2026 Sudan report, section 13.3.5](https://www.gov.uk/government/publications/sudan-country-policy-and-information-notes/country-policy-and-information-note-security-situation-sudan-july-2026-accessible), a tabulation of ACLED data downloaded on 16 July 2026. The four 2025 quarters reconcile to every state total and the national total of 18,663. These all-age civilian and combatant direct-fatality shares are a geographic proxy, not measurements of child or indirect mortality. The same shares are applied separately to each national age-specific death total; no further relative-risk adjustment is applied. Annual age-specific population shares determine rate denominators. The exact historical direct/indirect mortality definition remains unverified. National age-specific death totals are preserved; nonlinear conversion does not guarantee exact national U5MR aggregation. Intervals do not include additional crisis-death or allocation uncertainty. Unbenchmarked comparison panels retain their unadjusted estimates.\n\n"))
+}
+```
+
+```{r national_benchmark_pilot}
+source(file.path(bundle$home_dir, 'Rcode', '_supporting_scripts', 'benchmark_pilot_report.R'))
+benchmark_pilot_dashboard(load_benchmark_pilot(bundle$home_dir, country))
+```
+
+# Stratified vs unstratified
+
+These plots compare same-frame stratified BB8 estimates with all-survey unstratified BB8 estimates, split by benchmark status.
+
+```{r stratified-methods}
+benchmarked_stratified_methods <- plot_df %>%
+  filter(
+    method == "igme" |
+      grepl("strat\\.BB8\\.bench$", method) |
+      grepl("unstrat\\.allsurveys\\.BB8\\.bench$", method)
+  ) %>%
+  distinct(method) %>%
+  pull(method)
+
+unbenchmarked_stratified_methods <- plot_df %>%
+  filter(
+    method == "igme" |
+      grepl("strat\\.BB8$", method) |
+      grepl("unstrat\\.allsurveys\\.BB8$", method)
+  ) %>%
+  distinct(method) %>%
+  pull(method)
+```
+
+## Stratified vs unstratified - benchmarked
+
+::: {.panel-tabset}
+### U5MR
+
+```{r stratified-u5mr}
+make_timeseries(
+  plot_df %>% filter(method %in% benchmarked_stratified_methods),
+  "U5MR",
+  ribbon_methods = benchmarked_stratified_methods
+)
+```
+
+### NMR
+
+```{r stratified-nmr}
+make_timeseries(
+  plot_df %>% filter(method %in% benchmarked_stratified_methods),
+  "NMR",
+  ribbon_methods = benchmarked_stratified_methods
+)
+```
+:::
+
+## Stratified vs unstratified - unbenchmarked
+
+::: {.panel-tabset}
+### U5MR
+
+```{r stratified-unbenchmarked-u5mr}
+make_timeseries(
+  plot_df %>% filter(method %in% unbenchmarked_stratified_methods),
+  "U5MR",
+  ribbon_methods = unbenchmarked_stratified_methods
+)
+```
+
+### NMR
+
+```{r stratified-unbenchmarked-nmr}
+make_timeseries(
+  plot_df %>% filter(method %in% unbenchmarked_stratified_methods),
+  "NMR",
+  ribbon_methods = unbenchmarked_stratified_methods
+)
+```
+:::
+
+# Admin 1 U5MR by region
+
+```{r admin1-region-tabs-u5mr}
+make_admin1_region_tabs(admin1_model_df, "U5MR")
+```
+
+# benchmarked versus unbenchmarked
+
+These plots compare benchmarked and unbenchmarked subnational aggregates against IGME.
+
+```{r benchmark-methods}
+benchmark_methods <- plot_df %>%
+  filter(
+    method == "igme" |
+      grepl("strat\\.BB8", method) |
+      grepl("unstrat\\.allsurveys\\.BB8", method)
+  ) %>%
+  distinct(method) %>%
+  pull(method)
+```
+
+::: {.panel-tabset}
+## U5MR
+
+```{r benchmark-check-u5mr}
+make_timeseries(
+  plot_df %>% filter(method %in% benchmark_methods),
+  "U5MR",
+  ribbon_methods = benchmark_methods
+)
+```
+
+## NMR
+
+```{r benchmark-check-nmr}
+make_timeseries(
+  plot_df %>% filter(method %in% benchmark_methods),
+  "NMR",
+  ribbon_methods = benchmark_methods
+)
+```
+:::
+
+# Direct estimates
+
+Direct estimates use `SUMMER::getDirectList()` / `getDirect()` on the processed birth histories, with cluster, `v005`, age groups, year/period, and admin region. These are saved as files like `*_direct_admin1_u5.rda`, `*_direct_admin1_yearly_nmr.rda`, and related national/admin outputs. They are close to what the survey says for each survey, area, and time cell, so they can be noisy or missing when sample sizes are small.
+
+## Raw direct estimates
+
+::: {.panel-tabset}
+### U5MR
+
+```{r direct-raw-u5mr}
+make_direct_plot(direct_estimates_df, "U5MR")
+```
+
+### NMR
+
+```{r direct-raw-nmr}
+make_direct_plot(direct_estimates_df, "NMR")
+```
+:::
+
+## Smoothed direct estimates
+
+Smoothed direct estimates aggregate those direct estimates with `aggregateSurvey()` and then run `smoothDirect()` with AR1 time smoothing and spatial adjacency where available. This borrows strength over time and space, but the input is still the already-computed direct estimates.
+
+```{r direct-smoothed-methods}
+direct_smoothed_methods <- plot_df %>%
+  filter(method %in% c(
+    "igme",
+    "aggre.sd.adm1",
+    "aggre.sd.yearly.adm1",
+    "aggre.sd.adm2",
+    "aggre.sd.yearly.adm2"
+  )) %>%
+  distinct(method) %>%
+  pull(method)
+```
+
+::: {.panel-tabset}
+### U5MR
+
+```{r direct-smoothed-u5mr}
+make_timeseries(
+  plot_df %>% filter(method %in% direct_smoothed_methods),
+  "U5MR"
+)
+```
+
+### NMR
+
+```{r direct-smoothed-nmr}
+make_timeseries(
+  plot_df %>% filter(method %in% direct_smoothed_methods),
+  "NMR"
+)
+```
+:::
+
+# All Available Methods
+
+```{r all-method-admin-splits}
+all_methods_admin1 <- plot_df %>%
+  filter(method_admin_level %in% c("National", "Admin1"))
+all_methods_admin2 <- plot_df %>%
+  filter(method_admin_level %in% c("National", "Admin2"))
+```
+
+## Admin 1 All Available Methods
+
+::: {.panel-tabset}
+### U5MR
+
+```{r all-methods-admin1-u5mr}
+make_timeseries(
+  all_methods_admin1,
+  "U5MR"
+)
+```
+
+### NMR
+
+```{r all-methods-admin1-nmr}
+make_timeseries(
+  all_methods_admin1,
+  "NMR"
+)
+```
+:::
+
+## Admin 2 All Available Methods
+
+::: {.panel-tabset}
+### U5MR
+
+```{r all-methods-admin2-u5mr}
+make_timeseries(
+  all_methods_admin2,
+  "U5MR"
+)
+```
+
+### NMR
+
+```{r all-methods-admin2-nmr}
+make_timeseries(
+  all_methods_admin2,
+  "NMR"
+)
+```
+:::
+
+## Available method table
+
+```{r available-method-table}
+available_method_table <- plot_df %>%
+  filter(!method %in% plot_excluded_methods) %>%
+  distinct(outcome, method_admin_level, method, method_group, family, final_candidate) %>%
+  arrange(outcome, method_admin_level, desc(final_candidate), family, method)
+
+DT::datatable(
+  available_method_table,
+  rownames = FALSE,
+  filter = "top",
+  options = datatable_options_for(available_method_table)
+)
+```

@@ -1,0 +1,11 @@
+admin_level,previous_internal,previous_name,current_internal,current_name
+Admin1,admin1_1,Centre,admin1_6,Centre
+Admin1,admin1_2,Grand'Anse,admin1_8,Grande'Anse
+Admin1,admin1_3,L'Artibonite,admin1_5,Artibonite
+Admin1,admin1_4,Nippes,admin1_10,Nippes
+Admin1,admin1_5,Nord,admin1_3,North
+Admin1,admin1_6,Nord-Est,admin1_4,North-East
+Admin1,admin1_7,Nord-Ouest,admin1_9,North-West
+Admin1,admin1_8,Ouest,admin1_1,West
+Admin1,admin1_9,Sud,admin1_7,South
+Admin1,admin1_10,Sud-Est,admin1_2,South-East

@@ -1,0 +1,32 @@
+{
+  "country": "Tajikistan",
+  "iso0": "TJK",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_TJK_shp",
+  "poly.layer.adm0": "georepo_TJK_0",
+  "poly.layer.adm1": "georepo_TJK_1",
+  "poly.layer.adm2": "georepo_TJK_2",
+  "poly.label.adm1": "NAME_1",
+  "poly.label.adm2": "NAME_2",
+  "country.abbrev": "tjk",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": [
+    2010,
+    2020
+  ],
+  "surveys_1frame": [
+    2012,
+    2017
+  ],
+  "dhs_survey_year_start": 2012,
+  "strata_weight_source": "survey",
+  "strata_weight_missing_region_fallback": "national",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Tajikistan_general_info.json"
+}

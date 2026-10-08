@@ -1,0 +1,24 @@
+{
+  "country": "Zimbabwe",
+  "iso0": "ZWE",
+  "doHIVAdj": true,
+  "poly.path": "../shapeFiles/georepo_ZWE_shp",
+  "poly.layer.adm0": "georepo_ZWE_0",
+  "poly.layer.adm1": "georepo_ZWE_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "zwe",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2012,
+  "surveys_1frame": [2015, 2019],
+  "survey_excluded": 2005,
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Zimbabwe_general_info.json",
+  "poly.layer.adm2": "georepo_ZWE_2",
+  "poly.label.adm2": "NAME_2"
+}

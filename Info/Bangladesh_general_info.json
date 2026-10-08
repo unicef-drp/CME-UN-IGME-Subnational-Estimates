@@ -1,0 +1,23 @@
+{
+  "country": "Bangladesh",
+  "iso0": "BGD",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_BGD_shp",
+  "poly.layer.adm0": "georepo_BGD_0",
+  "poly.layer.adm1": "georepo_BGD_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "bgd",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2011,
+  "surveys_1frame": null,
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Bangladesh_general_info.json",
+  "poly.layer.adm2": "georepo_BGD_2",
+  "poly.label.adm2": "NAME_2"
+}

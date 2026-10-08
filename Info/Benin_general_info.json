@@ -1,0 +1,25 @@
+{
+  "country": "Benin",
+  "iso0": "BEN",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_BEN_shp",
+  "poly.layer.adm0": "georepo_BEN_0",
+  "poly.layer.adm1": "georepo_BEN_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "ben",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": [2002, 2013],
+  "surveys_1frame": 2017,
+  "survey_excluded": [2011, 2012],
+  "strata_weight_source": "survey",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "strat",
+    "bench.model": "bench"
+  },
+  "info.name": "Benin_general_info.json",
+  "poly.layer.adm2": "georepo_BEN_2",
+  "poly.label.adm2": "NAME_2"
+}

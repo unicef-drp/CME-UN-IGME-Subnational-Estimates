@@ -1,0 +1,27 @@
+{
+  "country": "Timor-Leste",
+  "iso0": "TLS",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_TLS_shp",
+  "poly.layer.adm0": "georepo_TLS_0",
+  "poly.layer.adm1": "georepo_TLS_1",
+  "poly.layer.adm2": "georepo_TLS_2",
+  "poly.label.adm1": "NAME_1",
+  "poly.label.adm2": "NAME_2",
+  "country.abbrev": "tls",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": null,
+  "surveys_1frame": 2009,
+  "dhs_survey_year_start": 2009,
+  "survey_excluded": 2016,
+  "strata_weight_source": "survey",
+  "strata_weight_missing_region_fallback": "national",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Timor-Leste_general_info.json"
+}

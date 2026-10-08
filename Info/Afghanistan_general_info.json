@@ -1,0 +1,36 @@
+{
+  "country": "Afghanistan",
+  "iso0": "AFG",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_AFG_shp",
+  "poly.layer.adm0": "georepo_AFG_0",
+  "poly.layer.adm1": "georepo_AFG_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "afg",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": null,
+  "surveys_1frame": 2023,
+  "strata_weight_source": "survey",
+  "dhs_admin1_from_recode": {
+    "survey_years": 2015,
+    "variable": "v024",
+    "cmc_adjust": 252,
+    "require_full_georepo_coverage": true,
+    "name_map": {
+      "Wardak": "Maidan Wardak",
+      "Kunarha": "Kunar",
+      "Nooristan": "Nuristan",
+      "Urozgan": "Uruzgan",
+      "Helmand": "Hilmand",
+      "Herat": "Hirat"
+    }
+  },
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Afghanistan_general_info.json"
+}

@@ -1,0 +1,6 @@
+source("Rcode/_supporting_scripts/admin_benchmark_helpers.R")
+latent<-list(list(latent=matrix(1,nrow=1,dimnames=list("(Intercept)",NULL))))
+stopifnot(identical(benchmark_diagnostic_draws(list(draws=latent)),latent))
+stopifnot(identical(benchmark_diagnostic_draws(list(benchmark=list(method="direct_pointmedian_v1"),source.fit.draws=latent)),latent))
+stopifnot(inherits(try(benchmark_diagnostic_draws(list(benchmark=list(method="direct_pointmedian_v1"))),silent=TRUE),"try-error"))
+cat("Diagnostics use source-fit latent samples for directly benchmarked outputs.\n")

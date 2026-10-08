@@ -1,0 +1,25 @@
+{
+  "country": "Sierra_Leone",
+  "iso0": "SLE",
+  "doHIVAdj": false,
+  "doCrisisAdj": true,
+  "poly.path": "../shapeFiles/georepo_SLE_shp",
+  "poly.layer.adm0": "georepo_SLE_0",
+  "poly.layer.adm1": "georepo_SLE_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "sle",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2004,
+  "surveys_1frame": [2008, 2013],
+  "strata_weight_source": "survey",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Sierra_Leone_general_info.json",
+  "poly.layer.adm2": "georepo_SLE_2",
+  "poly.label.adm2": "NAME_2"
+}

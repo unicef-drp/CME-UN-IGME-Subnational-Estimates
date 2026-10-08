@@ -1,0 +1,37 @@
+{
+  "country": "Mali",
+  "iso0": "MLI",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_MLI_shp",
+  "poly.layer.adm0": "georepo_MLI_0",
+  "poly.layer.adm1": "georepo_MLI_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "mli",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2009,
+  "urban_frame_admin1_parent_map": [
+    {"admin1": "Timbuktu", "frame_region": "Tombouctou"},
+    {"admin1": "Taoudenni", "frame_region": "Tombouctou"},
+    {"admin1": "Menaka", "frame_region": "Gao"},
+    {"admin1": "Nioro", "frame_region": "Kayes"},
+    {"admin1": "Kita", "frame_region": "Kayes"},
+    {"admin1": "Dioila", "frame_region": "Koulikoro"},
+    {"admin1": "Nara", "frame_region": "Koulikoro"},
+    {"admin1": "Bougouni", "frame_region": "Sikasso"},
+    {"admin1": "Koutiala", "frame_region": "Sikasso"},
+    {"admin1": "San", "frame_region": "Segou"},
+    {"admin1": "Douentza", "frame_region": "Mopti"},
+    {"admin1": "Bandiagara", "frame_region": "Mopti"}
+  ],
+  "surveys_1frame": [2012, 2018],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Mali_general_info.json",
+  "poly.layer.adm2": "georepo_MLI_2",
+  "poly.label.adm2": "NAME_2"
+}

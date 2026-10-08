@@ -1,0 +1,23 @@
+{
+  "country": "Sudan",
+  "iso0": "SDN",
+  "doHIVAdj": false,
+  "doCrisisAdj": true,
+  "poly.path": "../shapeFiles/georepo_SDN_shp",
+  "poly.layer.adm0": "georepo_SDN_0",
+  "poly.layer.adm1": "georepo_SDN_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "sdn",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2008,
+  "surveys_1frame": [2010, 2014],
+  "strata_weight_source": "survey",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "strat",
+    "bench.model": "bench"
+  },
+  "info.name": "Sudan_general_info.json"
+}

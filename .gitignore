@@ -1,0 +1,37 @@
+/Data/
+/Results/
+/tmp/
+.Rproj.user
+.positai
+rdhs.json
+C:\Users\yanliu\AppData\Local\Temp\Rtmp0CE8qn/rdhs.json
+
+# Local results, backups, dependencies and scratch work
+/Rcode/Results/
+/outputs/
+/.codex-tmp/
+/.codex_tmp_*
+/.superpowers/
+node_modules/
+
+# Local credentials and application state
+.Renviron
+.env
+.env.*
+!.env.example
+.Rhistory
+.RData
+.Ruserdata
+desktop.ini
+
+# Generated plot and render intermediates
+/Rplots.pdf
+*.log
+*.aux
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.knit.md
+*.utf8.md

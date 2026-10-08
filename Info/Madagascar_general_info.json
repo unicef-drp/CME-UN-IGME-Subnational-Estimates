@@ -1,0 +1,24 @@
+{
+  "country": "Madagascar",
+  "iso0": "MDG",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/_alt",
+  "poly.layer.adm0": "salb_MDG_0",
+  "poly.layer.adm1": "salb_MDG_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "mdg",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2018,
+  "admin1_name_merges": null,
+  "surveys_1frame": [2018, 2021],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "strat",
+    "bench.model": "bench"
+  },
+  "info.name": "Madagascar_general_info.json",
+  "poly.layer.adm2": "salb_MDG_2",
+  "poly.label.adm2": "NAME_2"
+}

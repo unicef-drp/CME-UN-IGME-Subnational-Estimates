@@ -1,0 +1,22 @@
+{
+  "country": "Niger",
+  "iso0": "NER",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_NER_shp",
+  "poly.layer.adm0": "georepo_NER_0",
+  "poly.layer.adm1": "georepo_NER_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "ner",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2012,
+  "surveys_1frame": 2021,
+  "strata_weight_source": "survey",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Niger_general_info.json"
+}

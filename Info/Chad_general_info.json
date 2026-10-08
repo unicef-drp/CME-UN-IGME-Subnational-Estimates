@@ -1,0 +1,23 @@
+{
+  "country": "Chad",
+  "iso0": "TCD",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_TCD_shp",
+  "poly.layer.adm0": "georepo_TCD_0",
+  "poly.layer.adm1": "georepo_TCD_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "tcd",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2009,
+  "surveys_1frame": null,
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Chad_general_info.json",
+  "poly.layer.adm2": "georepo_TCD_2",
+  "poly.label.adm2": "NAME_2"
+}

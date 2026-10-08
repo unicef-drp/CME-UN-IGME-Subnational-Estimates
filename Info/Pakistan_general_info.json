@@ -1,0 +1,23 @@
+{
+  "country": "Pakistan",
+  "iso0": "PAK",
+  "doHIVAdj": false,
+  "poly.path": "../shapeFiles/georepo_PAK_shp",
+  "poly.layer.adm0": "georepo_PAK_0",
+  "poly.layer.adm1": "georepo_PAK_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "pak",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2017,
+  "surveys_1frame": 2017,
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Pakistan_general_info.json",
+  "poly.layer.adm2": "georepo_PAK_2",
+  "poly.label.adm2": "NAME_2"
+}

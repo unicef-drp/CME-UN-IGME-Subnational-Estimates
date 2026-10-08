@@ -1,0 +1,48 @@
+{
+  "country": "Kenya",
+  "iso0": "KEN",
+  "doHIVAdj": true,
+  "poly.path": "../shapeFiles/georepo_KEN_shp",
+  "poly.layer.adm0": "georepo_KEN_0",
+  "poly.layer.adm1": "georepo_KEN_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "ken",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": null,
+  "surveys_1frame": [
+    2003,
+    2008
+  ],
+  "strata_weight_source": "survey",
+  "strata_weight_missing_region_fallback": "national",
+  "model_run_status": [
+    {
+      "model": "admin1_smoothed_direct_nmr",
+      "variant": "yearly",
+      "status": "attempted_not_fitted",
+      "reason": "data_sparsity"
+    },
+    {
+      "model": "admin2_smoothed_direct_nmr",
+      "variant": "period",
+      "status": "attempted_not_fitted",
+      "reason": "data_sparsity"
+    },
+    {
+      "model": "admin2_smoothed_direct_nmr",
+      "variant": "yearly",
+      "status": "attempted_not_fitted",
+      "reason": "data_sparsity"
+    }
+  ],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Kenya_general_info.json",
+  "poly.layer.adm2": "georepo_KEN_2",
+  "poly.label.adm2": "NAME_2"
+}

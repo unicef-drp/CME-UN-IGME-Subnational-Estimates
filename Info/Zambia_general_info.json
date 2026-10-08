@@ -1,0 +1,26 @@
+{
+  "country": "Zambia",
+  "iso0": "ZMB",
+  "doHIVAdj": true,
+  "poly.path": "../shapeFiles/georepo_ZMB_shp",
+  "poly.layer.adm0": "georepo_ZMB_0",
+  "poly.layer.adm1": "georepo_ZMB_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "zmb",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2010,
+  "urban_frame_admin1_parent_map": [
+    {"admin1": "Muchiga", "frame_region": "Muchinga"}
+  ],
+  "surveys_1frame": [2013, 2018],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Zambia_general_info.json",
+  "poly.layer.adm2": "georepo_ZMB_2",
+  "poly.label.adm2": "NAME_2"
+}

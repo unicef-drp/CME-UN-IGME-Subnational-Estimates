@@ -1,0 +1,25 @@
+{
+  "country": "Guinea",
+  "iso0": "GIN",
+  "doHIVAdj": false,
+  "doCrisisAdj": true,
+  "poly.path": "../shapeFiles/georepo_GIN_shp",
+  "poly.layer.adm0": "georepo_GIN_0",
+  "poly.layer.adm1": "georepo_GIN_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "gin",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": [2014, 2017],
+  "surveys_1frame": [2018],
+  "survey_excluded": [2016],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Guinea_general_info.json",
+  "poly.layer.adm2": "georepo_GIN_2",
+  "poly.label.adm2": "NAME_2"
+}

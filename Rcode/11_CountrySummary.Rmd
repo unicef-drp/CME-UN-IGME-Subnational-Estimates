@@ -1,0 +1,1147 @@
+---
+title: "`r paste(gsub('_', ' ', country), 'Country Summary')`"
+output: 
+  pdf_document:
+    toc: true
+    number_sections: true
+geometry: a4paper, margin=0.5in
+---
+
+
+<!-- Setup -->
+
+<!-- Libraries -->
+
+```{r libs, echo = FALSE, message=FALSE, warning=FALSE}
+
+# There are latest year (e.g. 2024) in a few file names, remember to replace
+
+
+options(gsubfn.engine = "R")
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(tidyverse)
+library(RColorBrewer)
+library(xtable)
+
+## knitr options
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+```
+
+<!-- User-defined Arguments -->
+```{r params}
+
+debugging <- FALSE
+
+## Timing of projection; refreshed after loading the country info file.
+
+end.proj.year <- 2025
+plot.years <- 2000:end.proj.year
+n_years <- length(plot.years)
+```
+
+
+<!-- Working Directory -->
+
+```{r setwd}
+# set the working directory from the shared project profile/path helpers
+USERPROFILE <- Sys.getenv("USERPROFILE")
+source(file.path(USERPROFILE, "Dropbox/UNICEF Work/profile.R"))
+dir_subnational <- file.path(dir_SP,
+                             "UN IGME Subnational/2026 Round Subnational/UN-Subnational-Estimates-main")
+source(file.path(dir_subnational, "Rcode/_supporting_scripts/project_paths.R"))
+
+if (!exists("country", inherits = TRUE)) {
+  stop("Run/source Rcode/1_Preperation.R first.", call. = FALSE)
+}
+
+home.dir <- project_home()
+require_country_context()
+source(file.path(
+  home.dir,
+  "Rcode",
+  "_supporting_scripts",
+  "direct_estimate_uncertainty.R"
+))
+time.model <- final_model$time.model
+sd.time.model <- final_model$sd.time.model
+strata.model <- final_model$strata.model
+bench.model <- final_model$bench.model
+bb8_admin1_only <- tolower(Sys.getenv("BB8_ADMIN1_ONLY", "0")) %in%
+  c("1", "true", "yes", "y")
+run_admin2_summary <- exists("poly.layer.adm2", inherits = TRUE) &&
+  !bb8_admin1_only
+plot.years <- 2000:end.proj.year
+n_years <- length(plot.years)
+
+knitr::opts_chunk$set(root.dir = home.dir)
+
+if(debugging == TRUE){
+  message("Debugging with knitr root.dir: ", home.dir)
+}
+
+# set the directory that stores the data
+
+
+data.dir <- country_data_dir(home.dir, country)
+# set the directory to store the results (e.g. fitted R objects, figures, tables in .csv etc.)
+
+res.dir <- file.path(home.dir, "Results", country)
+if (exists("poly.path")) {
+  poly.path <- resolve_country_data_path(poly.path, data.dir)
+}
+
+# Keep report figures aligned with the A4 portrait page geometry. These widths
+# are relative to the available LaTeX line width for every country.
+summary_full_width <- "0.95\\linewidth"
+summary_half_width <- "0.46\\linewidth"
+summary_square_width <- "0.68\\linewidth"
+
+if(grepl('_',country)){
+  country_print <- gsub('_',' ',country)
+}else{
+  country_print <- country
+}
+```
+
+
+<!-- ## Functions -->
+```{r fns}
+logit <- function(x){
+  log(x/(1-x))
+}
+expit <- function(x){
+  exp(x)/(1 + exp(x))
+}
+
+##### function to organize posterior draws from BB8 ####
+
+draw_1y_adm<-function(admin_draws, year_num,admin_vec, nsim=1000){
+  
+  # year_num: year of comparison
+  # nsim: number of posterior draws
+  # admin_vec: vector of admin index
+  # admin_draws: posterior draws (as a list from SUMMER output)
+  
+  # prepare reference frame for draws 
+  # ID corresponds to specific year, region
+  draw_ID<-c(1:length(admin_draws))
+  draw_year<-vector()
+  draw_region<-vector()
+  
+  for( i in draw_ID){
+    tmp_d<-admin_draws[[i]]
+    draw_year[i]<-tmp_d$years
+    draw_region[i]<-tmp_d$region
+  }
+  
+  draw_ref<-data.frame(id=draw_ID,year=draw_year,
+                       region=draw_region)
+  
+  draw_frame<-matrix( nrow = nsim, ncol = length(admin_vec))
+  
+  for(i in 1:length(admin_vec)){
+    admin_i<-admin_vec[i]
+    id_draw_set<-draw_ref[draw_ref$year==year_num&
+                            draw_ref$region==admin_i,]$id 
+    
+    draw_set<-admin_draws[[id_draw_set]]$draws
+    
+    draw_frame[,i]<-draw_set
+    #print(mean(r_frame[,c(admin_i)]))
+  }
+  
+  colnames(draw_frame)<-admin_vec
+  
+  return(draw_frame)
+}
+
+```
+
+<!-- # Load Data: Country Info -->
+
+
+```{r load_countryinfo, echo = FALSE}
+# Country context is loaded by Rcode/1_Preperation.R.
+```
+
+<!-- #### Load admin names  ------------------------------------------------------ -->
+
+```{r load adminnames}
+load(file.path(poly.path, paste0(country, '_Amat.rda')))
+load(file.path(poly.path, paste0(country, '_Amat_Names.rda')))
+source(file.path(home.dir, 'Rcode', '_supporting_scripts', 'report_output_config.R'))
+report_admin1_names <- filter_report_admin_rows(
+  admin1.names, report_excluded_admin_ids(home.dir, country, 1L), 'Internal'
+)
+```
+
+<!-- #### load admin1 and admin2 weights #### -->
+
+```{r load_adminwts}
+load(paste0(data.dir,'/worldpop/adm1_weights_u1.rda'))
+load(paste0(data.dir,'/worldpop/adm1_weights_u5.rda'))
+if(run_admin2_summary){
+  load(paste0(data.dir,'/worldpop/adm2_weights_u1.rda'))
+  load(paste0(data.dir,'/worldpop/adm2_weights_u5.rda'))
+}
+
+```
+
+
+<!-- Load model data -->
+
+```{r load cluster dat}
+
+if(strata.model == "strat"){
+  load(paste0(data.dir, '/', country, '_cluster_dat_1frame.rda'), 
+       envir = .GlobalEnv)
+}else{
+  load(paste0(data.dir, '/', country, '_cluster_dat.rda'),
+       envir = .GlobalEnv)
+}
+
+end.year <- max(mod.dat$survey)
+
+## Define a bunch of time parameters!
+if(((end.year-beg.year+1) %% 3) == 0){
+  beg.period.years <- seq(beg.year, end.year, 3) 
+  end.period.years <- beg.period.years + 2 
+}else if(((end.year-beg.year+1) %% 3) == 1){
+  beg.period.years <- c(beg.year, beg.year+2,
+                        seq(beg.year+4,end.year, 3))
+  end.period.years <- c(beg.year+1, beg.year+3,
+                        seq(beg.year+6,end.year, 3))
+}else if(((end.year-beg.year+1) %% 3) == 2){
+  beg.period.years <- c(beg.year, seq(beg.year+2, end.year, 3))
+  end.period.years <- c(beg.year+1,seq(beg.year+4, end.year, 3))
+}
+```
+
+# Intro
+
+These estimates are created using `r ifelse(strata.model == "unstrat", "an unstratified", "a stratified")` BB8 model with subnational estimates using a `r toupper(time.model)` main temporal effect and a `r toupper(time.model)`xICAR spatiotemporal interaction term with area-specific random slopes. \par
+
+`r if (strata.model == "unstrat") "The unstratified specification is used as the default final model; the same-frame stratified specification is retained as a comparison branch." else ""` \par
+
+```{r,  results='asis'}
+if(run_admin2_summary){
+  cat("\n",country_print, ' has ', nrow(report_admin1_names), ' Admin 1 areas and ', nrow(admin2.names), 'Admin 2 areas. \n')
+}else{
+  cat("\n", country_print, ' has ', nrow(report_admin1_names), ' Admin 1 areas. \n')
+}
+```
+
+Subnational BB8 mortality estimates use 90\% uncertainty intervals. Other interval levels are stated in the relevant figures and tables.
+
+```{r cod_crisis_update_note, results='asis'}
+if (identical(country, "DR_Congo") && isTRUE(doCrisisAdj)) {
+  source(file.path(home.dir, "Rcode", "_supporting_scripts", "cod_crisis_report_notes.R"))
+  for (note in cod_crisis_report_notes(home.dir)) {
+    cat("\n\n", gsub("%", "\\\\%", note), "\n\n", sep = "")
+  }
+}
+```
+
+
+```{r eth_crisis_update_note, results='asis'}
+if (identical(country, "Ethiopia") && isTRUE(doCrisisAdj)) {
+  cat(paste0("\n\nEthiopia crisis adjustment: national famine crisis deaths for 2021--2023 are assigned to Tigray. Infant deaths and deaths at ages 1--4 are allocated separately across its seven zones using the corresponding annual age-specific population shares. This assumes equal age-specific excess mortality risk across the zones. The adjustment is added to U5MR; NMR is unchanged.\n\n",
+    "The 2023 geographic attribution remains unverified in the primary mortality source and is an explicit allocation assumption. The population surfaces do not directly observe wartime displacement. National crisis death totals are preserved; the nonlinear conversion means population-weighted local U5MR increments do not exactly reproduce the national increment. Uncertainty intervals retain the underlying model uncertainty and do not include additional uncertainty in crisis deaths or their geographic allocation.\n\n"))
+}
+```
+
+```{r mwi_crisis_update_note, results='asis'}
+if (identical(country, "Malawi") && isTRUE(doCrisisAdj)) {
+  source(file.path(home.dir, "Rcode", "_supporting_scripts", "mwi_crisis_report_notes.R"))
+  cat(paste(mwi_crisis_report_notes(home.dir), collapse = "\n\n"), "\n\n")
+}
+```
+
+```{r sdn_crisis_update_note, results='asis'}
+if (identical(country, "Sudan") && isTRUE(doCrisisAdj)) {
+  cat(paste0("\n\nSudan historical crisis scenario: national crisis deaths for 2004--2005 are assigned to the five current Darfur states. Infant deaths and deaths at ages 1--4 are allocated separately using annual age-specific population shares within Darfur. This assumes equal age-specific excess mortality risk within Darfur and applies current boundaries retrospectively. The adjustment is added to U5MR; NMR is unchanged.\n\n",
+    "The updated national workbook is authoritative: the recent-war adjustment is intentionally limited to 2025, with no adjustment for 2023--2024. For 2025, the workbook totals of 6,257 infant deaths and 9,215 deaths at ages 1--4 are allocated across 18 states using their shares of recorded full-year conflict fatalities. Geographic weights come from the UK Home Office [July 2026 Sudan report, section 13.3.5](https://www.gov.uk/government/publications/sudan-country-policy-and-information-notes/country-policy-and-information-note-security-situation-sudan-july-2026-accessible), a tabulation of ACLED data downloaded on 16 July 2026. The four 2025 quarters reconcile to every state total and the national total of 18,663. These all-age civilian and combatant direct-fatality shares are a geographic proxy, not measurements of child or indirect mortality. The same shares are applied separately to each national age-specific death total; no further relative-risk adjustment is applied. Annual age-specific population shares determine rate denominators. Historical source metadata identifies the Darfur conflict, but the exact direct/indirect mortality definition remains unverified. National age-specific death totals are preserved; nonlinear conversion need not preserve the national U5MR increment exactly. Uncertainty intervals retain model uncertainty and do not include additional uncertainty in crisis deaths or allocation.\n\n"))
+}
+```
+
+```{r national_benchmark_pilot, results='asis'}
+source(file.path(home.dir, 'Rcode', '_supporting_scripts', 'benchmark_pilot_report.R'))
+benchmark_pilot_pdf(load_benchmark_pilot(home.dir, country))
+```
+
+# National Data Summaries and Results
+
+## Survey data
+```{r sumstat, echo = F,results='asis', warning=FALSE}
+levels(mod.dat$urban) <- tolower(levels(mod.dat$urban))
+
+mod.dat$survey.table <- paste(mod.dat$survey.type,
+                              mod.dat$survey, sep = " ")
+clus.table <- aggregate(cluster ~ survey.table + urban,
+                        data = mod.dat,
+                        FUN = function(x){length(unique(x))})
+clus.xtable <- reshape(clus.table,
+                       v.names = "cluster",
+                       idvar = "survey.table",
+                       timevar = "urban",
+                       direction = "wide")
+clus.xtable$Total <- clus.xtable$cluster.urban + 
+  clus.xtable$cluster.rural
+row.names(clus.xtable) <- clus.xtable[,'survey.table']
+
+colnames(clus.xtable) <- c("Survey", "Urban",
+                           "Rural", "Total")
+clus.printxtable <- xtable(clus.xtable, 
+                           digits = c(0,0,0,0,0),
+                           align = "ccccc",
+                           caption =
+                             paste0("Number of clusters by urban/rural ",
+                                    "designation by survey for ", country_print, "."))
+print.xtable(clus.printxtable, 
+             comment = F, 
+             include.rownames = F)
+
+sum.table <- aggregate(cbind(Y, total) ~ survey.table + age,
+                       data = mod.dat,
+                       FUN = sum)
+sum.tableList <- list()
+
+surveys <- unique(mod.dat$survey.table) %>% sort()
+
+for(idx in 1:length(surveys)){
+  survey <- surveys[idx]
+  sum.tableList[[survey]] <- sum.table[sum.table$survey.table == survey,-1]
+  names(sum.tableList[[survey]]) <- c("Age", 
+                                      "No. Deaths",
+                                      "No. Agemonths")
+}
+
+survey_tables_per_page <- 5L
+survey_table_pages <- split(
+  seq_along(sum.tableList),
+  ceiling(seq_along(sum.tableList) / survey_tables_per_page)
+)
+
+for (page_idx in seq_along(survey_table_pages)) {
+  page_tables <- sum.tableList[survey_table_pages[[page_idx]]]
+  attr(page_tables, "subheadings") <- names(page_tables)
+  continued <- if (page_idx > 1L) " (continued)" else ""
+  sum.print <- xtableList(
+    page_tables,
+    digits = c(0,0,0,0),
+    align = "cccc",
+    caption = paste0(
+      "Numbers of agemonths and deaths by age group for each survey used ",
+      "in analysis for ", country_print, continued, "."
+    )
+  )
+
+  print.xtableList(
+    sum.print,
+    comment = F,
+    include.rownames = F,
+    table.placement = "!ht",
+    colnames.format = if (length(sum.print) > 1L) "multiple" else "single"
+  )
+
+  if (page_idx < length(survey_table_pages)) {
+    cat("\\clearpage\n")
+  }
+}
+```
+
+\clearpage
+
+```{r coefs, results ='asis', echo = FALSE}
+bench_str <- ifelse(bench.model == "", bench.model, "_bench")
+
+if(strata.model == "strat"){
+  fixed.filename <- paste0(country, "_fixed_adm1_",
+                           time.model, "_", strata.model,
+                           "_u5", bench_str, ".rda")
+}else{
+  fixed.filename <- paste0(country, "_fixed_adm1_",
+                           time.model, "_", strata.model,
+                           "_u5_allsurveys", bench_str, ".rda")
+  
+}
+
+if(!file.exists(paste0(res.dir, "/Betabinomial/U5MR/",
+                       fixed.filename))){
+  if(file.exists(paste0(res.dir, "/Betabinomial/U5MR/",
+                        gsub(paste0(time.model, "_"), "", fixed.filename)))){
+    fixed.filename <- gsub(paste0(time.model, "_"), "", fixed.filename)
+    message("Loading fixed effects from the file\n", fixed.filename, "\n")
+  }else{
+    message("Cannot find the fixed effects file specified.")
+  }
+}else{
+  message("Loading fixed effects from the file\n", fixed.filename, "\n")  
+}
+
+
+load(paste0(res.dir, "/Betabinomial/U5MR/", fixed.filename))
+
+if(strata.model == "unstrat"){
+  if(bench.model == ""){
+    coefs <- bb.fixed.adm1.unstrat.u5.allsurveys
+  }else{
+    coefs <- bb.fixed.adm1.unstrat.u5.allsurveys.bench
+  }
+}else{
+  if(bench.model == ""){
+    coefs <- bb.fixed.adm1.strat.u5
+  }else{
+    coefs <- bb.fixed.adm1.strat.u5.bench
+  }
+}
+coefs$tab <- paste0("(",
+                    round(expit(coefs$`0.025quant`)*1000,1),
+                    ",",
+                    round(expit(coefs$`0.975quant`)*1000,1),
+                    ")")
+coefs <- coefs[,c("0.5quant", "tab")]
+coefs$`0.5quant` <- round(expit(coefs$`0.5quant`)*1000,1)
+names(coefs) <- c("Median", "Interval")
+
+if(strata.model == "strat"){
+  coefs_tab <- coefs %>% 
+    mutate(varname = row.names(coefs)) %>% 
+    filter(grepl("age", varname)) %>% 
+    mutate(Urban = substr(varname, nchar(varname) - 5 + 1, nchar(varname))) %>% 
+    mutate(varname = gsub("age.intercept", "", varname),
+           varname = gsub(":urban", "", varname),
+           varname = gsub(":rural", "", varname)) %>%
+    pivot_wider(id_cols = varname,
+                names_from = "Urban",
+                values_from = Interval) %>%  
+    rename("Age" = "varname") %>% 
+    as.data.frame()
+}else{
+  coefs_tab <- coefs %>% 
+    mutate(varname = row.names(coefs)) %>% 
+    filter(grepl("age", varname)) %>% 
+    mutate(varname = gsub("age.intercept", "", varname),
+           varname = gsub(":urban", "", varname),
+           varname = gsub(":rural", "", varname)) %>%  
+    rename("Age" = "varname") %>% 
+    as.data.frame()
+}
+
+bench_cap_str <- ifelse(bench.model == "", "unbenchmarked", "benchmarked")
+source(file.path(home.dir, "Rcode", "_supporting_scripts", "admin_benchmark_helpers.R"))
+source_fit_report <- bench.model != "" && is_direct_benchmark_file(
+  file.path(res.dir, "Betabinomial", "U5MR", sub("_fixed_", "_res_", fixed.filename, fixed = TRUE)))
+if (source_fit_report) {
+  bench_cap_str <- "HIV-adjusted source fit of the"
+  cat("National benchmarking scales mortality-rate draws after fitting. Intervals are conditional on fixed national median targets. The monthly hazard parameters below describe the source fit before this calibration.\n\n")
+}
+
+strata_cap_str <- ifelse(strata.model == "unstrat", "unstratified",
+                         "stratified")
+coefs.xtable <- xtable(coefs_tab,
+                       align = c("ll|cc"),
+                       digits = c(0,0, 0,0),
+                       caption =
+                         paste0("The 95\\% credible intervals for monthly ", 
+                                "hazards in terms of 1000 ",
+                                "children by age band for the Admin-1, ",
+                                bench_cap_str, " ", strata_cap_str,
+                                " model for ",
+                                country_print, "."))
+print.xtable(coefs.xtable, 
+             comment = F, 
+             include.rownames = F,
+             table.placement = "ht")
+```
+
+\clearpage
+
+## Figures
+```{r urodds, results='asis'}
+if(strata.model == 'strat'){
+  
+  ur.odds.filename <- paste0(country, "_URodds_natl_",
+                             time.model, "_", strata.model,
+                             "_u5.pdf")
+  
+  if(!file.exists(paste0(res.dir, "/Figures/Trends/U5MR/", ur.odds.filename))){
+    if(file.exists(paste0(res.dir, "/Figures/Trends/U5MR/",
+                          gsub(paste0(time.model, "_"), "", ur.odds.filename)))){
+      ur.odds.filename <- gsub(paste0(time.model, "_"), "", ur.odds.filename)
+    }else{
+      message("Cannot find the UR odds file specified.")
+    }
+    
+  }
+  cat("\\begin{figure}\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_full_width, "]{", res.dir,
+             "/Figures/Trends/U5MR/",
+             ur.odds.filename, "}\n"))
+  cat(paste0("\\caption{Urban rural odds ratio from stratified national model.}\n",
+             "\\end{figure}\n",
+             "\\clearpage"))
+}
+```
+
+
+```{r natl, results = 'asis'}
+load_bb_result <- function(metric_dir, file_stub, object_name) {
+  result_env <- new.env(parent = emptyenv())
+  result_file <- file.path(
+    res.dir, "Betabinomial", metric_dir,
+    paste0(country, "_res_", file_stub, ".rda")
+  )
+  if (identical(metric_dir, "U5MR") &&
+      grepl("^adm[12]_.*_bench$", file_stub)) {
+    result_file <- select_crisis_result_file(result_file)
+  }
+  load(result_file, envir = result_env)
+  get(object_name, envir = result_env)
+}
+
+bb_result_exists <- function(metric_dir, file_stub) {
+  file.exists(file.path(res.dir, "Betabinomial", metric_dir,
+                        paste0(country, "_res_", file_stub, ".rda")))
+}
+
+selected_natl_result <- function(outcome) {
+  if (strata.model == "strat") {
+    return(list(
+      stub = paste0("natl_strat_", outcome),
+      object = paste0("bb.res.natl.strat.", outcome)
+    ))
+  }
+  list(
+    stub = paste0("natl_unstrat_", outcome, "_allsurveys"),
+    object = paste0("bb.res.natl.unstrat.", outcome, ".allsurveys")
+  )
+}
+
+load_direct_result <- function(metric_dir, file_stub, object_name) {
+  result_env <- new.env(parent = emptyenv())
+  load(file.path(res.dir, "Direct", metric_dir,
+                 paste0(country, "_", file_stub, ".rda")),
+       envir = result_env)
+  get(object_name, envir = result_env)
+}
+
+load_igme <- function(file_name) {
+  igme.raw <- read.csv(file.path(home.dir, "Data", "IGME", file_name))
+  igme <- igme.raw[igme.raw$ISO.Code == iso0, ]
+  igme <- data.frame(t(igme[, 10:ncol(igme)]))
+  names(igme) <- c("lower", "median", "upper")
+  igme$years <- as.numeric(stringr::str_remove(row.names(igme), "X")) - 0.5
+  igme <- igme[igme$years %in% plot.years, ]
+  row.names(igme) <- NULL
+  igme[, c("lower", "median", "upper")] <-
+    igme[, c("lower", "median", "upper")] / 1000
+  igme
+}
+
+aggregate_admin1_draws <- function(model_result, weights) {
+  admin_vec <- admin1.names$Internal
+  weights$years <- as.numeric(as.character(weights$years))
+  nsim <- length(model_result$draws.est.overall[[1]]$draws)
+
+  natl <- lapply(plot.years, function(year) {
+    pop <- weights[weights$years == year, ]
+    pop <- pop[match(admin_vec, pop$region), ]
+    if (nrow(pop) != length(admin_vec) || any(is.na(pop$proportion))) {
+      stop("Missing Admin-1 population weights for ", year, call. = FALSE)
+    }
+
+    admin_draws <- draw_1y_adm(
+      admin_draws = model_result$draws.est.overall,
+      year_num = year,
+      admin_vec = admin_vec,
+      nsim = nsim
+    )
+    natl_draws <- as.vector(admin_draws %*% pop$proportion)
+    data.frame(
+      years = year,
+      lower = quantile(natl_draws, probs = 0.025, names = FALSE),
+      median = quantile(natl_draws, probs = 0.5, names = FALSE),
+      upper = quantile(natl_draws, probs = 0.975, names = FALSE)
+    )
+  })
+
+  do.call(rbind, natl)
+}
+
+bb_overall <- function(model_result) {
+  overall <- model_result$overall[, c("years", "lower", "median", "upper")]
+  overall$years <- as.numeric(as.character(overall$years))
+  overall
+}
+
+selected_natl_panel_result <- function(metric_dir, outcome, weights) {
+  if (bench.model != "") {
+    if (strata.model == "strat") {
+      bench_stub <- paste0("adm1_strat_", outcome, "_bench")
+      bench_object <- paste0("bb.res.adm1.strat.", outcome, ".bench")
+    } else {
+      bench_stub <- paste0("adm1_unstrat_", outcome, "_allsurveys_bench")
+      bench_object <- paste0(
+        "bb.res.adm1.unstrat.", outcome, ".allsurveys.bench"
+      )
+    }
+    if (!bb_result_exists(metric_dir, bench_stub)) {
+      stop(
+        "Selected benchmarked Admin-1 result does not exist: ",
+        bench_stub,
+        call. = FALSE
+      )
+    }
+    return(aggregate_admin1_draws(
+      load_bb_result(metric_dir, bench_stub, bench_object),
+      weights
+    ))
+  }
+
+  selected <- selected_natl_result(outcome)
+  bb_overall(load_bb_result(metric_dir, selected$stub, selected$object))
+}
+
+plot_model_band <- function(bb, igme, outcome_label, model_label, ylim,
+                            show_legend = FALSE) {
+  if (nrow(bb) == 0 || all(is.na(bb$median))) {
+    stop("No BB8 values available for ", model_label, call. = FALSE)
+  }
+
+  plot(NA, xlim = range(plot.years), ylim = ylim,
+       xlab = "Year", ylab = outcome_label,
+       main = model_label)
+
+  polygon(c(igme$years, rev(igme$years)),
+          1000 * c(igme$upper, rev(igme$lower)),
+          col = adjustcolor("grey80", alpha.f = 0.45),
+          border = FALSE)
+  lines(igme$years, 1000 * igme$median, col = "grey45", lwd = 2,
+        lty = 2)
+
+  polygon(c(bb$years, rev(bb$years)),
+          1000 * c(bb$upper, rev(bb$lower)),
+          col = adjustcolor("black", alpha.f = 0.18),
+          border = FALSE)
+  lines(bb$years, 1000 * bb$median, col = "white", lwd = 4.5)
+  lines(bb$years, 1000 * bb$median, col = "black", lwd = 3)
+
+  if (show_legend) {
+    legend("topright", bty = "n", cex = 0.8,
+           col = c("grey45", "black"),
+           lty = c(2, 1),
+           lwd = c(2, 2.5),
+           legend = c("IGME", "BB8"))
+  }
+}
+
+plot_direct_medians <- function(direct, bb, igme, survey_years, survey_cols,
+                                outcome_label, ylim) {
+  plot(NA, xlab = "Year", ylab = outcome_label,
+       ylim = ylim, xlim = range(plot.years), type = "l",
+       main = paste(country_print, "- direct estimates with 1 SE bars"))
+
+  for (survey in survey_years) {
+    tmp <- direct[direct$surveyYears == survey &
+                    direct$years %in% plot.years, ]
+    tmp <- tmp[order(tmp$years), ]
+    if (nrow(tmp) == 0 || all(is.na(tmp$mean))) {
+      next
+    }
+    width <- tmp$upper - tmp$lower
+    cex2 <- median(width, na.rm = TRUE) / width
+    cex2[cex2 > 6] <- 6
+    cex2[!is.finite(cex2)] <- 1
+    survey_idx <- match(survey, survey_years)
+    tmp <- cbind(tmp, direct_standard_error_bounds(tmp))
+    se_rows <- is.finite(tmp$lower_1se) & is.finite(tmp$upper_1se)
+
+    arrows(
+      x0 = tmp$years[se_rows],
+      y0 = 1000 * tmp$lower_1se[se_rows],
+      x1 = tmp$years[se_rows],
+      y1 = 1000 * tmp$upper_1se[se_rows],
+      angle = 90,
+      code = 3,
+      length = 0.025,
+      col = adjustcolor(survey_cols[survey_idx], alpha.f = 0.75),
+      lwd = 0.9
+    )
+
+    lines(tmp$years, 1000 * tmp$mean, col = survey_cols[survey_idx],
+          lwd = 2)
+    points(tmp$years, 1000 * tmp$mean, pch = 19,
+           col = adjustcolor(survey_cols[survey_idx], alpha.f = 0.35),
+           cex = cex2)
+  }
+
+  lines(igme$years, 1000 * igme$median, lty = 2, lwd = 2,
+        col = "grey45")
+  lines(bb$years, 1000 * bb$median, col = "black", lwd = 2.5)
+  legend("topright", bty = "n",
+         col = c(survey_cols, "grey45", "black"),
+         lwd = 2, lty = c(rep(1, length(survey_cols)), 2, 1),
+         legend = c(paste0(survey_years, " (+/- 1 SE)"),
+                    "IGME", "BB8"),
+         cex = 0.55)
+}
+
+plot_direct_intervals <- function(direct, survey_years, survey_cols,
+                                  outcome_label, ylim) {
+  plot(NA, xlab = "Year", ylab = outcome_label,
+       ylim = ylim, xlim = range(plot.years), type = "l",
+       main = paste(country_print, "- direct 95% confidence intervals"))
+
+  for (survey in survey_years) {
+    tmp <- direct[direct$surveyYears == survey &
+                    direct$years %in% plot.years, ]
+    tmp <- tmp[order(tmp$years), ]
+    tmp <- tmp[!is.na(tmp$upper) & !is.na(tmp$lower), ]
+    if (nrow(tmp) == 0) {
+      next
+    }
+    survey_idx <- match(survey, survey_years)
+    polygon(x = c(tmp$years, rev(tmp$years)),
+            y = 1000 * c(tmp$upper, rev(tmp$lower)),
+            col = adjustcolor(survey_cols[survey_idx], alpha.f = 0.25),
+            border = FALSE)
+  }
+
+  legend("topright", bty = "n",
+         fill = adjustcolor(survey_cols, alpha.f = 0.25),
+         border = survey_cols,
+         legend = survey_years, cex = 0.55)
+}
+
+plot_natl_four_panel <- function(direct, bb_original, bb_unbench, igme,
+                                 outcome_label) {
+  survey_years <- sort(unique(as.numeric(as.character(mod.dat$survey))))
+  survey_cols <- rainbow(length(survey_years))
+  direct_plot <- direct[direct$surveyYears %in% survey_years &
+                          direct$years %in% plot.years, ]
+  ylim <- c(
+    0,
+    ceiling(1000 * max(c(direct_plot$upper, igme$upper,
+                         bb_original$upper, bb_unbench$upper),
+                       na.rm = TRUE) * 1.05)
+  )
+
+  old.par <- par(no.readonly = TRUE)
+  on.exit(par(old.par), add = TRUE)
+  par(mfrow = c(2, 2), mar = c(4, 4, 3, 1),
+      oma = c(0, 0, 0, 0), lend = 1)
+  plot_direct_medians(direct_plot, bb_original, igme, survey_years, survey_cols,
+                      outcome_label, ylim)
+  plot_direct_intervals(direct_plot, survey_years, survey_cols,
+                        outcome_label, ylim)
+  plot_model_band(bb_original, igme, outcome_label,
+                  country_print, ylim,
+                  show_legend = TRUE)
+  if (is.null(bb_unbench)) {
+    plot.new()
+    title(main = "Unbenchmarked comparison unavailable")
+  } else {
+    plot_model_band(bb_unbench, igme, outcome_label,
+                    paste(country_print, "unbenchmarked"), ylim,
+                    show_legend = TRUE)
+  }
+}
+
+nmr.original <- selected_natl_panel_result("NMR", "nmr", weight.adm1.u1)
+u5.original <- selected_natl_panel_result("U5MR", "u5", weight.adm1.u5)
+nmr.unbench <- if (bb_result_exists("NMR", "adm1_unstrat_nmr_allsurveys")) {
+  aggregate_admin1_draws(
+    load_bb_result("NMR",
+                   "adm1_unstrat_nmr_allsurveys",
+                   "bb.res.adm1.unstrat.nmr.allsurveys"),
+    weight.adm1.u1
+  )
+} else {
+  NULL
+}
+u5.unbench <- if (bb_result_exists("U5MR", "adm1_unstrat_u5_allsurveys")) {
+  aggregate_admin1_draws(
+    load_bb_result("U5MR",
+                   "adm1_unstrat_u5_allsurveys",
+                   "bb.res.adm1.unstrat.u5.allsurveys"),
+    weight.adm1.u5
+  )
+} else {
+  NULL
+}
+
+igme.nmr <- load_igme("igme2026_nmr.csv")
+igme.u5 <- load_igme("igme2026_u5.csv")
+direct.nmr <- load_direct_result("NMR", "direct_natl_yearly_nmr",
+                                 "direct.natl.yearly.nmr")
+direct.u5 <- load_direct_result("U5MR", "direct_natl_yearly_u5",
+                                "direct.natl.yearly.u5")
+
+natl_figures <- list(
+  list(outcome = "nmr", dir = "NMR", label = "NMR", direct = direct.nmr,
+       original = nmr.original, unbench = nmr.unbench, igme = igme.nmr),
+  list(outcome = "u5", dir = "U5MR", label = "U5MR", direct = direct.u5,
+       original = u5.original, unbench = u5.unbench, igme = igme.u5)
+)
+
+for (fig in natl_figures) {
+  natl.compare.filename <- file.path(
+    res.dir, "Figures", "Summary", fig$dir,
+    paste0(country, "_natl_", strata.model, "_", time.model, "_",
+           fig$outcome, "_Spaghetti4.pdf")
+  )
+  natl.compare.png.filename <- sub("[.]pdf$", ".png", natl.compare.filename)
+  dir.create(dirname(natl.compare.filename), recursive = TRUE,
+             showWarnings = FALSE)
+
+  pdf(natl.compare.filename, width = 9.5, height = 6.8)
+  plot_natl_four_panel(fig$direct, fig$original, fig$unbench, fig$igme,
+                       fig$label)
+  dev.off()
+
+  png(natl.compare.png.filename, width = 2280, height = 1632, res = 240)
+  plot_natl_four_panel(fig$direct, fig$original, fig$unbench, fig$igme,
+                       fig$label)
+  dev.off()
+
+  cat("\\begin{figure}[!ht]\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_full_width, "]{",
+             normalizePath(natl.compare.filename, winslash = "/"),
+             "}\n"))
+  cat(paste0("\\caption{", fig$label, " results from the national BB8 ",
+             "model. In the first panel, vertical bars show plus/minus one ",
+             "design-based standard error: the square root of the direct ",
+             "estimate variance on the logit scale, transformed to the ",
+             "mortality-probability scale. The second panel shows the 95\\% ",
+             "confidence intervals for the same direct estimates. The ",
+             "fourth panel adds the unbenchmarked unstratified BB8 ",
+             "comparison against IGME.}\n",
+             "\\end{figure}\n",
+             "\\clearpage\n"))
+}
+```
+
+\clearpage
+
+# Subnational Results
+
+
+```{r neighbadm1, results='asis'}
+if(run_admin2_summary){
+  cat("\\begin{figure}[!h]\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+             "/Figures/ShapeCheck/",
+             country, "_adm1_neighb.pdf}\n"))
+  cat("\\hfill\n")
+  cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+             "/Figures/ShapeCheck/",
+             country, "_adm2_neighb.pdf}\n"))
+  cat(paste0("\\caption{Top: The neighborhood structure of Admin 1 areas. ",
+             "Bottom: The neighborhood structure of Admin 2 areas.}\n",
+             "\\end{figure}\n"))
+}else{
+  cat("\\begin{figure}[!h]\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+             "/Figures/ShapeCheck/",
+             country, "_adm1_neighb.pdf}\n"))
+  cat(paste0("\\caption{The neighborhood structure of Admin 1 areas.}\n",
+             "\\end{figure}\n"))
+}
+```
+
+
+## Admin 1 Figures
+
+```{r adm1, results = 'asis'}
+selected_years <- unique(c(2000, 2005, 2010, 2015, 2020, max(plot.years)))
+selected_years <- intersect(selected_years, plot.years)
+selected_year_label <- paste(selected_years, collapse = ", ")
+selected_year_suffix <- paste0(min(selected_years), "_", max(selected_years))
+
+adm1.nmr.filename <- paste0(country, "_adm1_", time.model, "_",
+                            strata.model, "_nmr", bench_str,
+                            "_medianmap_", selected_year_suffix, ".pdf")
+
+if(!file.exists(paste0(res.dir, "/Figures/Summary/NMR/", adm1.nmr.filename))){
+  message("Cannot find the Admin-1 NMR file specified.")
+}
+
+adm1.u5.filename <- paste0(country, "_adm1_", time.model, "_",
+                           strata.model, "_u5", bench_str,
+                           "_medianmap_", selected_year_suffix, ".pdf")
+
+if(!file.exists(paste0(res.dir, "/Figures/Summary/U5MR/", adm1.u5.filename))){
+  message("Cannot find the Admin-1 U5MR file specified.")
+}
+
+
+cat("\\begin{figure}[!h]\n \\centering\n")
+cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+           "/Figures/Summary/NMR/",
+           adm1.nmr.filename, "}\n"))
+cat("\\\\[1em]\n")
+cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+           "/Figures/Summary/U5MR/",
+           adm1.u5.filename, "}\n"))
+cat(paste0("\\caption{NMR (top) and U5MR (bottom) ",
+           "results in ", selected_year_label, " ",
+           "from the Admin-1 BB8 model.}\n",
+           "\\end{figure}\n",
+           "\\clearpage"))
+
+
+adm1.nmr.PD.filename <- paste0(country, "_adm1_", time.model, "_",
+                            strata.model, "_nmr", bench_str,
+                            "_", "PDmap.pdf")
+
+if(!file.exists(paste0(res.dir, "/Figures/Summary/NMR/", adm1.nmr.PD.filename))){
+  message("Cannot find the Admin-1 NMR file specified.")
+}
+
+adm1.u5.PD.filename <- paste0(country, "_adm1_", time.model, "_",
+                           strata.model, "_u5", bench_str,
+                           "_", "PDmap.pdf")
+
+if(!file.exists(paste0(res.dir, "/Figures/Summary/U5MR/", adm1.u5.PD.filename))){
+  message("Cannot find the Admin-1 U5MR file specified.")
+}
+  
+cat("\\begin{figure}[!h]\n \\centering\n")
+cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+           "/Figures/Summary/NMR/",
+           adm1.nmr.PD.filename, "}\n"))
+cat("\\hfill\n")
+cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+           "/Figures/Summary/U5MR/",
+           adm1.u5.PD.filename, "}\n"))
+cat(paste0("\\caption{NMR (left) and U5MR (right) ",
+           "percentage decline ", min(plot.years), " to ", max(plot.years), " ",
+           "from the Admin-1 BB8 model.}\n",
+           "\\end{figure}\n",
+           "\\clearpage"))
+
+
+
+```
+
+```{r adm1nationaltotal, results = 'asis'}
+adm1.nmr.national.filename <- paste0(
+  country, "_Admin1_nmr_NationalTotal_", time.model, "_",
+  strata.model, bench_str, ".pdf"
+)
+adm1.u5.national.filename <- paste0(
+  country, "_Admin1_u5_NationalTotal_", time.model, "_",
+  strata.model, bench_str, ".pdf"
+)
+admin1.national.figures <- data.frame(
+  outcome = c("NMR", "U5MR"),
+  directory = c("NMR", "U5MR"),
+  filename = c(adm1.nmr.national.filename, adm1.u5.national.filename),
+  stringsAsFactors = FALSE
+)
+
+for (figure_index in seq_len(nrow(admin1.national.figures))) {
+  figure <- admin1.national.figures[figure_index, ]
+  figure.path <- file.path(
+    res.dir, "Figures", "Summary", figure$directory, figure$filename
+  )
+  if (!file.exists(figure.path)) {
+    stop("Cannot find the Admin-1 national-total figure: ", figure.path,
+         call. = FALSE)
+  }
+  cat("\\begin{figure}[!h]\n \\centering\n")
+  cat(paste0(
+    "\\includegraphics[width=", summary_full_width, "]{", figure.path,
+    "}\n"
+  ))
+  cat(paste0(
+    "\\caption{Median Admin-1 ", figure$outcome,
+    " estimates with the final official National total.}\n",
+    "\\end{figure}\n",
+    "\\clearpage\n"
+  ))
+}
+```
+
+```{r adm1spag, results = 'asis', fig.cap = "Median NMR estimates by Admin-1 from the BB8 model."}
+
+adm1.nmr.filenames <- list.files(paste0(res.dir, "/Figures/Summary/NMR/"))
+adm1.nmr.filenames <- adm1.nmr.filenames[grepl("_Admin1_nmr_SpaghettiAll_",
+                                               adm1.nmr.filenames)]
+
+if(bench.model == ""){
+  adm1.nmr.filenames <- adm1.nmr.filenames[grepl(time.model, adm1.nmr.filenames) &
+                                             grepl(paste0("_", strata.model,
+                                                          "_"),
+                                                   adm1.nmr.filenames) &
+                                             !grepl("bench", adm1.nmr.filenames)] %>%
+    sort()
+}else{
+  adm1.nmr.filenames <- adm1.nmr.filenames[grepl(time.model, adm1.nmr.filenames) &
+                                             grepl(paste0("_", strata.model,
+                                                          "_",bench.model,"_"),
+                                                   adm1.nmr.filenames)] %>%
+    sort()
+}
+
+if(length(adm1.nmr.filenames) == 0){
+  message("Cannot find the Admin-1 NMR file specified.")
+}
+
+
+adm1.u5.filenames <- list.files(paste0(res.dir, "/Figures/Summary/U5MR/"))
+adm1.u5.filenames <- adm1.u5.filenames[grepl("_Admin1_u5_SpaghettiAll_",
+                                             adm1.u5.filenames)]
+if(bench.model == ""){
+  adm1.u5.filenames <- adm1.u5.filenames[grepl(time.model, adm1.u5.filenames) &
+                                           grepl(paste0("_", strata.model,
+                                                        "_"),
+                                                 adm1.u5.filenames) &
+                                           !grepl("bench", adm1.u5.filenames)] %>%
+    sort()
+}else{
+  adm1.u5.filenames <- adm1.u5.filenames[grepl(time.model, adm1.u5.filenames) &
+                                           grepl(paste0("_", strata.model,
+                                                        "_",bench.model,"_"),
+                                                 adm1.u5.filenames)] %>%
+    sort()
+}
+
+if(length(adm1.u5.filenames) == 0){
+  message("Cannot find the Admin-1 U5MR file specified.")
+}
+
+for(nmr.file in adm1.nmr.filenames){
+  cat("\\begin{figure}[!h]\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_square_width, "]{", res.dir,
+             "/Figures/Summary/NMR/",
+             nmr.file, "}\n"))
+  cat(paste0("\\end{figure}\n"))
+}
+cat("\\clearpage")
+```
+
+```{r adm1spagu5, results = "asis", fig.cap = "Median U5MR estimates by Admin-1 from the BB8 model."}
+for(u5.file in adm1.u5.filenames){
+  cat("\\begin{figure}[!h]\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_square_width, "]{", res.dir,
+             "/Figures/Summary/U5MR/",
+             u5.file, "}\n"))
+  cat(paste0("\\end{figure}\n"))
+}
+```
+
+\clearpage
+
+
+```{r adm2, results = 'asis'}
+if(run_admin2_summary){
+  cat("\n## Admin 2 Figures\n")
+  
+  adm2.nmr.filename <- paste0(country, "_adm2_", time.model, "_",
+                              strata.model, "_nmr", bench_str,
+                              "_medianmap_", selected_year_suffix, ".pdf")
+  
+  if(!file.exists(paste0(res.dir, "/Figures/Summary/NMR/", adm2.nmr.filename))){
+    message("Cannot find the Admin-2 NMR file specified.")
+  }
+  
+  adm2.u5.filename <- paste0(country, "_adm2_", time.model, "_",
+                             strata.model, "_u5", bench_str,
+                             "_medianmap_", selected_year_suffix, ".pdf")
+  
+  if(!file.exists(paste0(res.dir, "/Figures/Summary/U5MR/", adm2.u5.filename))){
+    message("Cannot find the Admin-2 U5MR file specified.")
+  }
+  
+  
+  cat("\\begin{figure}[!h]\n \\centering\n")
+  cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+             "/Figures/Summary/NMR/",
+             adm2.nmr.filename, "}\n"))
+  cat("\\hfill\n")
+  cat(paste0("\\includegraphics[width=", summary_half_width, "]{", res.dir,
+             "/Figures/Summary/U5MR/",
+             adm2.u5.filename, "}\n"))
+  cat(paste0("\\caption{NMR (left) and U5MR (right) ",
+             "results in ", selected_year_label, " ",
+             "from the Admin-2 BB8 model.}\n",
+             "\\end{figure}\n",
+             "\\clearpage"))
+}
+```
+
+```{r adm2spag, results = 'asis',fig.cap = "Median NMR estimates by Admin-2 from the BB8 model."}
+if(run_admin2_summary){
+  adm2.nmr.filenames <- list.files(paste0(res.dir, "/Figures/Summary/NMR/"))
+  adm2.nmr.filenames <- adm2.nmr.filenames[grepl("_Admin2_nmr_SpaghettiAll_",
+                                                 adm2.nmr.filenames)]
+  if(bench.model == ""){
+    adm2.nmr.filenames <- adm2.nmr.filenames[grepl(time.model, adm2.nmr.filenames) &
+                                               grepl(paste0("_", strata.model,
+                                                            "_"),
+                                                     adm2.nmr.filenames) &
+                                               !grepl("bench", adm2.nmr.filenames)] %>%
+      sort()
+  }else{
+    adm2.nmr.filenames <- adm2.nmr.filenames[grepl(time.model, adm2.nmr.filenames) &
+                                               grepl(paste0("_", strata.model,
+                                                            "_",bench.model,"_"),
+                                                     adm2.nmr.filenames)] %>%
+      sort()
+  }
+  
+  
+  if(length(adm2.nmr.filenames) == 0){
+    message("Cannot find the Admin-2 NMR file specified.")
+  }
+  
+  
+  adm2.u5.filenames <- list.files(paste0(res.dir, "/Figures/Summary/U5MR/"))
+  adm2.u5.filenames <- adm2.u5.filenames[grepl("_Admin2_u5_SpaghettiAll_",
+                                               adm2.u5.filenames)]
+  if(bench.model == ""){
+    adm2.u5.filenames <- adm2.u5.filenames[grepl(time.model, adm2.u5.filenames) &
+                                             grepl(paste0("_", strata.model,
+                                                          "_"),
+                                                   adm2.u5.filenames) &
+                                             !grepl("bench", adm2.u5.filenames)] %>%
+      sort()
+  }else{
+    adm2.u5.filenames <- adm2.u5.filenames[grepl(time.model, adm2.u5.filenames) &
+                                             grepl(paste0("_", strata.model,
+                                                          "_",bench.model,"_"),
+                                                   adm2.u5.filenames)] %>%
+      sort()
+  }
+  
+  if(length(adm2.u5.filenames) == 0){
+    message("Cannot find the Admin-2 U5MR file specified.")
+  }
+  
+  for(nmr.file in adm2.nmr.filenames){
+    cat("\\begin{figure}[!h]\n \\centering\n")
+    cat(paste0("\\includegraphics[width=", summary_square_width, "]{", res.dir,
+               "/Figures/Summary/NMR/",
+               nmr.file, "}\n"))
+    cat(paste0("\\end{figure}\n"))
+  }
+  cat("\\clearpage")
+}
+```
+
+```{r adm2spagu5, results = "asis", fig.cap = "Median U5MR estimates by Admin-2 from the BB8 model."}
+if(run_admin2_summary){
+  for(u5.file in adm2.u5.filenames){
+    cat("\\begin{figure}[!h]\n \\centering\n")
+    cat(paste0("\\includegraphics[width=", summary_square_width, "]{", res.dir,
+               "/Figures/Summary/U5MR/",
+               u5.file, "}\n"))
+    cat(paste0("\\end{figure}\n"))
+  }
+ }
+
+```

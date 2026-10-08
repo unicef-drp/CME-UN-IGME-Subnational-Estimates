@@ -1,0 +1,32 @@
+{
+  "country": "Tanzania",
+  "iso0": "TZA",
+  "doHIVAdj": true,
+  "poly.path": "../shapeFiles/georepo_TZA_shp",
+  "poly.layer.adm0": "georepo_TZA_0",
+  "poly.layer.adm1": "georepo_TZA_1",
+  "poly.label.adm1": "NAME_1",
+  "georepo_boundary_exclusions": [
+    {
+      "level": 1,
+      "name": "Under National Administration",
+      "reason": "GeoRepo features are not official Tanzania regions"
+    }
+  ],
+  "country.abbrev": "tza",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": [2002, 2012],
+  "surveys_1frame": [2015, 2022],
+  "survey_excluded": 2012,
+  "strata_weight_source": "survey",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Tanzania_general_info.json",
+  "poly.layer.adm2": "georepo_TZA_2",
+  "poly.label.adm2": "NAME_2"
+}

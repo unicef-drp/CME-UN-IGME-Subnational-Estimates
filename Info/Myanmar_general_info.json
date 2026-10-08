@@ -1,0 +1,28 @@
+{
+  "country": "Myanmar",
+  "iso0": "MMR",
+  "doHIVAdj": false,
+  "doCrisisAdj": true,
+  "poly.path": "../shapeFiles/georepo_MMR_shp",
+  "poly.layer.adm0": "georepo_MMR_0",
+  "poly.layer.adm1": "georepo_MMR_1",
+  "poly.label.adm1": "NAME_1",
+  "country.abbrev": "mmr",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2014,
+  "surveys_1frame": [
+    2016
+  ],
+  "strata_weight_source": "survey",
+  "strata_weight_missing_region_fallback": "national",
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Myanmar_general_info.json",
+  "poly.layer.adm2": "georepo_MMR_2",
+  "poly.label.adm2": "NAME_2"
+}

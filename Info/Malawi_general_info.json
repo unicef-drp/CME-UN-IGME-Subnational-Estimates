@@ -1,0 +1,42 @@
+{
+  "country": "Malawi",
+  "iso0": "MWI",
+  "doHIVAdj": true,
+  "doCrisisAdj": true,
+  "poly.path": "../shapeFiles/georepo_MWI_shp",
+  "poly.layer.adm0": "georepo_MWI_0",
+  "poly.layer.adm1": "georepo_MWI_1",
+  "poly.label.adm1": "NAME_1",
+  "georepo_boundary_exclusions": [
+    {
+      "level": 1,
+      "name": "Under National Administration",
+      "reason": "GeoRepo feature is not an official Malawi region"
+    }
+  ],
+  "country.abbrev": "mwi",
+  "beg.year": 2000,
+  "end.proj.year": 2025,
+  "frame_year": 2018,
+  "surveys_1frame": [2020, 2024],
+  "dhs_survey_year_start": 2004,
+  "survey_excluded": 2014,
+  "strata_weight_source": "survey",
+  "model_run_status": [
+    {
+      "model": "admin2_smoothed_direct_nmr",
+      "variant": "yearly",
+      "status": "attempted_not_fitted",
+      "reason": "data_sparsity"
+    }
+  ],
+  "final_model": {
+    "time.model": "ar1",
+    "sd.time.model": "ar1",
+    "strata.model": "unstrat",
+    "bench.model": "bench"
+  },
+  "info.name": "Malawi_general_info.json",
+  "poly.layer.adm2": "georepo_MWI_2",
+  "poly.label.adm2": "NAME_2"
+}
