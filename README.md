@@ -1,137 +1,153 @@
-# UN Pipeline Overview
+# CME — UN IGME Subnational Estimates
 
-## Summary
+R pipeline for neonatal mortality (NMR) and under-five mortality (U5MR) estimation at national, Admin-1 and, where configured, Admin-2 levels. It prepares survey data, fits direct, smoothed-direct and Beta-binomial (BB8) models, applies HIV adjustment and national benchmarking, and produces diagnostics, dashboards and country reports.
 
-This document provides detailed instructions for obtaining direct, smoothed direct, and urban/rural stratified Beta-binomial estimates for U5MR and NMR, as well as maps and figures of these results.
+This repository builds on the [original UN Subnational Estimates repository](https://github.com/alanamcgovern/UN-Subnational-Estimates). Country selection, survey exclusions, geographic scope and the selected final model are controlled by `Info/<Country>_general_info.json`.
 
-At some points in the pipeline, you will need to reference this sheet with specific information about each country: <https://docs.google.com/spreadsheets/d/1farrC3nJ0K-m35zzhZb3E7sSTGJ0iOg4ezZyhQVXt1A/edit#gid=0>. This will be referred to as the 'Country Info Sheet'. As you work through the pipeline, please update the 'Analysis' sheet.
+## Repository contents
 
-## The Pipeline
+| Location | Purpose |
+|---|---|
+| [Rcode/](Rcode/) | Numbered pipeline scripts and entry points |
+| [Rcode/_supporting_scripts/](Rcode/_supporting_scripts/) | Shared model, path, benchmarking and pipeline helpers |
+| [Rcode/_script_for_specific_tasks/](Rcode/_script_for_specific_tasks/) | Country-specific processing, crisis adjustment and recovery scripts |
+| [Info/](Info/) | Country JSON configuration; older configuration scripts are retained in `Info/Archive/` |
+| [tests/](tests/) | Focused regression and workflow checks |
+| [docs/](docs/) | Method notes and country-specific implementation records |
+| [REFERENCE_BB8_WORKFLOW.md](REFERENCE_BB8_WORKFLOW.md) | Detailed BB8 workflow reference |
 
-#### Step 0: Prepare R and SUMMER package
+`Data/`, `Results/`, `outputs/`, temporary files, local credentials and dependency folders are excluded from Git. A clone contains source and configuration; it does not include the inputs or previously generated country results.
 
-Make sure your R version is at least 4.1.0 (also RStudio is using R 4.1.0 or more recent version). Otherwise, installation of dependent packages might fail. Also, make sure you are using the most recent version of the SUMMER available on github: <https://github.com/richardli/SUMMER>. You can install this by running: devtools::install_github('richardli/SUMMER')
+## Requirements and local setup
 
-#### Step 1: Setting up file structure
+Use R and an RStudio project opened at the repository root. The preparation script checks for `spdep`, `SUMMER`, `geosphere`, `stringr`, `tidyverse`, `rdhs`, `sf`, `haven` and `INLA`. Reporting and runner functions also use packages including `rmarkdown`, `jsonlite` and `openxlsx`; individual scripts may require additional packages. PDF rendering requires Pandoc and a working LaTeX installation. Package versions are not pinned by a lockfile in this repository.
 
--   Clone this repository on your local computer and open the 'UN-Subnational-Estimates' R project in RStudio.
--   Run create_folder.R. This will create the necessary file structure. *Make sure to specify the country of interest*
+The current preparation layer expects the shared local profile:
 
-#### Step 2: Downloading shapefiles
-
--   Check the boundary notes on the Country Info Sheet to see if the country of interest needs special handling.
-
-    -   Run `Rcode/2_download_georepo_shapefiles.R` to download and normalize UNICEF GeoRepo boundary files into `Data/shapeFiles/georepo_<ISO3>_shp`.
-    -   If the country requires special boundary handling, document it directly in `Info/<Country>_general_info.json`.
-
-![](Ref_figs/Data_structure3.png)
-
-#### Step 3: Data Processing
-
-Run the 'DataProcessing.R' script from the 'Rcode' folder. *Make sure to specify the country of interest at the top of the script!!*
-
--   In this script you will use the 'rdhs' package to download the DHS survey data. This requires you to enter your DHS login information and project name -- if you haven't yet requested access to the DHS data, you must create an account and request access. Be sure to request access for whichever country you need and to also request access for the GPS data for that country.
-
-#### Step 4: Direct Estimates
-
-Run Direct_SmoothDirect.R. This script will calculate direct and smoothed direct NMR and U5MR estimates and generate figures. *Make sure to specify the country of interest where it is requested at the top of the script*
-
-NOTE: It is normal for some of these models to not run due to data sparsity. These estimates are just to be used for comparison to the Beta-binomial estimates (which will take care of the sparsity issue)
-
-#### Step 5: Obtain Admin-level aggregation weights
-
-Run Admin_Weights.R. This script will download population surfaces for each year and use them to calculate admin-level weights to use in benchmarking and plotting. Note that downloading the population surfaces could take a signficant amount of time depending on internet connection and the size of the country. *Make sure to specify the country of interest where it is requested at the top of the script*
-
-#### Step 6: Checking Preliminary Results
-
-Run Comparison_Plot.R, ignoring any sections that refer to the Beta-binomial (BB8) model. This script will aggregate admin-level estimates up to the national level using the weights from Step 5 so that we can compare models before moving on to the Beta-binomial models.
-
-#### Step 7: Addressing Stratification
-
--   In the Country Info Sheet, check the 'census frame' column to determine the frame year that will be used for stratification.
-
--   Check the 'Data/urban_frames' folder for the relevant country and frame year. If the file you need is already there, you can proceed to the next step. Otherwise, see the 'UR fraction' folder for further instructions.
-
--   Run the rest of ur_prop.R and make sure that the Admin-1 names in the final object, ref.tab, match up. In the end, the ref.tab object should look like the following:
-
-![](Ref_figs/BGD_ref.tab.png)
-
--   Run UR_thresholding.R to obtain urban/rural sampling weights to be used in the Beta-binomial model. At the top of the script, make sure to specify (1) the country, (2) the frame year being used, and (3) the survey years that used this census frame (also available in the Country Info Sheet)
-
-#### Step 8: Beta-Binomial Estimates
-
-Run BB8.R and, again, *make sure to specify the country of interest*. This will fit and generate estimates for U5MR and NMR models at the National, Admin-1, Admin-2 levels. You will fit stratified and unstratified models which only use the surveys in the most recent sample frame, as well as unstratified models which include all surveys. *For now, do not run the benchmarked models.*
-
-#### Step 9: Checking Beta-binomial Results
-
-Run Comparison_Plot.R again, this time generating a figure comparing the Beta-binomial estimates. This script will aggregate admin-level estimates up to the national level using the weights from Step 5 so that we can compare models before moving on to benchmarking. Then run Diagnostic_Plots.R to get some diagnostic plots will be helpful to assess before moving on to benchmarking.
-
-#### Step 10: Benchmarking Final Estimates
-
-After determining whether we will use the stratified model or the unstratified model which uses all surveys, go back to the BB8.R script and now run the benchmarked models which correspond to the model we have chosen (strat or unstrat_allsurveys). *Make sure to run all applicable setup chunks before fitting models*
-
-#### Step 10b: Crisis Adjustments
-
-If your country needs a crisis adjustment, download Data/Crisis_Adjustment and Rcode/applyCrisisAdj.R and put them in your Data and Rcode folders in your local directory. Then run applyCrisisAdj.R, making sure to specify country of interest and the final model at the top of the script. This script will apply crisis adjustments to the U5MR estimates for the appropriate years and save them.
-
-#### Step 11: Reporting Results
-
-Run Report_Plot.R to generate figures for the final report and be sure to specify 1) country of interest 2) which time model is used for BB8 models (AR1 is the default) 3) which time model is best for smooth direct (if both are good, choose AR1) 4) whether stratified or unstratified is used for the final model. Then knit CountrySummary.Rmd, specifying the same fields at the top of the script, and then save this pdf report.
-
-## Refresh after national IGME estimates change
-
-Use the dedicated country runner when the four 2026 files in `Data/IGME` have
-changed but survey, boundary, population-weight, and model-choice inputs have
-not. Run preview first:
-
-If the final national files have not already been placed in `Data/IGME`, stage
-them without touching the active release:
-
-```powershell
-Rscript --vanilla "Data/IGME/update results file.R"
+```r
+USERPROFILE <- Sys.getenv("USERPROFILE")
+source(file.path(USERPROFILE, "Dropbox/UNICEF Work/profile.R"))
 ```
 
-Then preview the selected country:
+This profile supplies shared directory variables such as `dir_SP` and `dir_IGME`. It is not included in Git. Configure it for your own environment before running the pipeline. The current preparation code also locates supporting code through the shared subnational project directory; the repository is not a standalone, zero-configuration installation.
 
-```powershell
-Rscript --vanilla Rcode/run_igme_refresh.R --country Cameroon --preview
+For an explicitly selected local project root, set:
+
+```r
+Sys.setenv(UN_SUBNATIONAL_HOME = normalizePath(".", winslash = "/"))
 ```
 
-Preview validates the named country's ISO and model-year coverage, compares a
-possible staged release under `Data/IGME/staged` with the active release, and
-inventories every affected benchmark/dashboard/report file. It does not run a
-model or replace an output.
+Supply the applicable inputs separately under `Data/` or through the configured external paths:
 
-After reading the preview manifest, run the authorized production refresh:
+- Authorized DHS/MICS birth-history microdata and, where applicable, survey GPS files. DHS downloading requires approved access and local `rdhs` credentials.
+- Administrative boundaries and the country-specific geographic mappings.
+- WorldPop population rasters and urban/rural frame inputs, or configured survey-based stratum weights.
+- National IGME targets, HIV-adjustment inputs and any configured crisis inputs.
+- Previous-final estimates when a comparison appendix is required.
 
-```powershell
-Rscript --vanilla Rcode/run_igme_refresh.R --country Cameroon --production
+Do not commit restricted microdata or local credentials. The pipeline can download some inputs, but required permissions and country-specific preparation still apply.
+
+## Run a country
+
+Always select the country explicitly, using the identifier in `Info/` (for example, `Malawi` or `Cote_dIvoire`). Review its JSON configuration before running.
+
+### Manual workflow
+
+Open [Rcode/run_country_pipeline.R](Rcode/run_country_pipeline.R), set the country and other controls at the top, and execute the setup and numbered blocks one at a time. **The current file contains enabled `if (TRUE)` processing blocks: sourcing or executing the entire file runs those blocks.** Its introductory comment saying that no processing is run does not describe those enabled blocks.
+
+The main sequence is:
+
+| Stage | Script |
+|---|---|
+| Load configuration and create folders | `Rcode/1_Preperation.R` |
+| Obtain and normalize boundaries | `Rcode/2_download_georepo_shapefiles.R` |
+| Process survey data | `Rcode/3_DataProcessing_sf.R` |
+| Direct and smoothed-direct estimates | `Rcode/4_Direct_SmoothDirect_sf.R` |
+| Annual population aggregation weights | `Rcode/5_Admin_Weights_sf.R` |
+| Preliminary comparison | `Rcode/6_Comparison_Plot.R` |
+| Urban/rural frame weights, when applicable | `Rcode/7a_UR_prop.R`, `Rcode/7b_UR_thresholding_sf.R` |
+| BB8 fitting and national benchmarking | `Rcode/8_10_BB8.R` |
+| Selected unstratified Admin-1 benchmark backfill | `Rcode/8_10_Run_Unstrat_Admin1_Benchmarks.R` |
+| BB8 comparison/dashboard and diagnostics | `Rcode/9_Comparison_Plot.R`, `Rcode/9_Diagnostic_Plots.R` |
+| Final report plots | `Rcode/11_Report_Plot.R` |
+| Country summary and comparison appendix | `Rcode/11_CountrySummary.Rmd`, `Rcode/12_Previous_Final_Comparison.R` |
+
+For MICS, run only the applicable country section of the relevant preprocessing script before survey processing. Survey-based stratum weights can replace the urban-frame stages when configured. Apply the established country-specific crisis adjustment after benchmarking and before final reporting when `doCrisisAdj` is enabled.
+
+### Structured runner
+
+From the repository root, call the supporting runner explicitly:
+
+```r
+source("Rcode/_supporting_scripts/pipeline_runner.R")
+run_country_pipeline(
+  country = "Malawi",
+  mode = "preview",
+  render_summary = TRUE,
+  report_year = 2026L,
+  project_dir = getwd()
+)
 ```
 
-Production performs the following sequence for one country:
+Country-pipeline `preview` is a processing workflow with review checkpoints; it can generate data and model outputs before stopping for review. It is not an inventory-only dry run. Use `mode = "production"` for the production workflow after reviewing the configuration and inputs.
 
-1. Back up the active IGME files, when a newer staged release must be promoted,
-   under `Data/IGME/backups/<run-id>/` and verify SHA-256 hashes.
-2. Retain the existing unbenchmarked model results and refit every applicable
-   benchmarked NMR/U5MR family at the configured administrative levels.
-3. When `doCrisisAdj` is enabled, reapply the country's established crisis
-   adjustment to the refreshed benchmarked U5MR files before reporting. The
-   supported configured countries are DR Congo, Guinea, Haiti, Liberia,
-   Myanmar, and Sierra Leone.
-4. Regenerate the BB8 comparison dashboard, diagnostics, report figures, and
-   country-summary PDF with its appendix.
-5. Validate readable 1,000-draw benchmark results and non-empty deliverables,
-   then write `Results/<Country>/logs/<run-id>_igme_refresh/pipeline_manifest.json`.
+## Default national benchmarking
 
-Existing country model outputs and report deliverables are overwritten in place;
-the refresh does not create `Results/<Country>/backups/` copies.
+HIV adjustment and national benchmarking are separate steps:
 
-The optional `--skip-summary` flag is preview-only. Production always rebuilds
-and structurally validates the public PDF, including its page count. The runner
-also requires all exact Admin-1/Admin-2 benchmark families and region-year cells
-to be regenerated during the current run; an unchanged old output cannot pass.
+1. Fit the base BB8 model with the configured HIV adjustments in the survey likelihood.
+2. Calibrate the resulting regional mortality-rate draws to the national IGME median for each indicator, administrative level and year, including projection years.
 
-A successful automated run ends as `completed_pending_visual_review`. Inspect
-the comparison dashboard and every PDF page before treating the country output
-as publishable. Run countries separately so logs and failure recovery remain
-isolated.
+The annual calibration factor is:
+
+```text
+factor = national IGME median / sum(population weight × regional posterior median)
+```
+
+The same factor scales each regional draw for that year, including available urban/rural stratum draws. Medians, intervals, means and variances are recomputed from the calibrated draws. The population-weighted regional medians match the national target; the median of the weighted joint draws is a different statistic and need not match exactly.
+
+National targets are fixed medians: their uncertainty is not propagated. NMR/U5MR and Admin-1/Admin-2 are calibrated independently, without an ordering or cross-level consistency constraint. Missing targets, invalid weights or coverage, and calibrated rates outside `[0, 1]` stop execution.
+
+Benchmarked result files retain the `*_bench.rda` naming convention and carry `benchmark$method = "direct_pointmedian_v1"`. Diagnostic components describe the HIV-adjusted source fit. Existing country outputs need a rerun to reflect this default.
+
+See [the benchmarking method note](docs/national_benchmarking.md) and [the shared implementation](Rcode/_supporting_scripts/admin_benchmark_helpers.R).
+
+## Refresh after national IGME targets change
+
+Use the dedicated refresh function when national IGME inputs change while survey, boundary, population-weight and model-choice inputs remain unchanged:
+
+```r
+source("Rcode/_supporting_scripts/pipeline_runner.R")
+source("Rcode/_supporting_scripts/igme_refresh_runner.R")
+run_igme_refresh(
+  country = "Malawi",
+  mode = "preview",
+  render_summary = TRUE,
+  report_year = 2026L,
+  project_dir = getwd()
+)
+```
+
+Unlike country-pipeline preview, IGME-refresh preview validates and inventories the proposed refresh without fitting models or replacing country outputs. Inspect its manifest before calling the same function with `mode = "production"`.
+
+The production refresh validates the active/staged national release, handles the selected benchmark family, reapplies supported configured crisis adjustments, and rebuilds downstream outputs. It can replace existing outputs. Inspect the run manifest for exact scope and backup locations. Production requires the country-summary PDF.
+
+**Current entry-point limitation:** `Rcode/run_igme_refresh.R` sets `COUNTRY <- "Angola"` and passes an empty argument list to its parser. Its advertised CLI flags do not currently select the country or mode. Use the explicit function call above.
+
+## Outputs and review
+
+Country outputs are written under `Results/<Country>/`, including model objects, comparison dashboards, diagnostic figures, report figures and summary PDFs. Runner logs and manifests are under `Results/<Country>/logs/`.
+
+Check the selected model, year and region coverage, benchmark closure, NMR/U5MR ordering, diagnostics and crisis treatment. Inspect the dashboard and rendered PDF before publication. A completed processing run does not establish scientific or publication approval.
+
+## Focused checks
+
+Run individual regression scripts from the repository root, for example:
+
+```sh
+Rscript --vanilla tests/test_admin_benchmark_postfit_calibration.R
+Rscript --vanilla tests/test_direct_benchmark_diagnostic_draws.R
+Rscript --vanilla tests/test_benchmark_entrypoint_selection.R
+```
+
+Other tests cover country configuration, data preparation, geographic joins, model compatibility and reporting. Some checks require local packages or country inputs.
